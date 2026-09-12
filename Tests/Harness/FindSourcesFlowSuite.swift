@@ -63,11 +63,10 @@ enum FindSourcesFlowSuite {
                 let (store, _) = try Fixtures.temporaryStore()
                 let notebook = try Fixtures.makeNotebook(store, title: "Approval")
 
-                var fetched: [String] = []
-                let lock = NSLock()
+                let fetched = Recorder<String>()
                 let server = LocalHTTPServer { request in
                     if request.path == "/robots.txt" { return .text("User-agent: *\nAllow: /\n") }
-                    lock.lock(); fetched.append(request.path); lock.unlock()
+                    fetched.append(request.path)
                     return .text(Fixtures.htmlPage(title: "Page \(request.path)",
                                                    body: FindSourcesFlowSuite.page(request.path)),
                                  contentType: "text/html")
@@ -110,8 +109,8 @@ enum FindSourcesFlowSuite {
                 try ctx.equal(added[0].title, "User's pick")
 
                 // The two unapproved pages were never requested.
-                try ctx.check(!fetched.contains("/ai-pick"), "the model's pick was not fetched")
-                try ctx.check(!fetched.contains("/ignored"), "the third result was not fetched")
+                try ctx.check(!fetched.all.contains("/ai-pick"), "the model's pick was not fetched")
+                try ctx.check(!fetched.all.contains("/ignored"), "the third result was not fetched")
                 try ctx.equal(fetched.filter { $0 == "/user-pick" }.count, 1, "only the approved page was fetched")
 
                 // And the notebook holds exactly one source, with real content.

@@ -226,6 +226,55 @@ public enum Harness {
     }
 }
 
+// MARK: - Thread-safe counters for test fixtures
+
+/// A counter that can be incremented from a `@Sendable` closure.
+///
+/// Tests that run a request handler on a server thread need to count or record what
+/// happened, and a captured `var` cannot be mutated from a concurrently-executing closure:
+/// Swift 6 rejects it outright, and the older toolchain on the macos-14 CI runner rejects
+/// it too (my newer local toolchain only warned, which is how this reached CI). A lock is
+/// the honest fix — the alternative, `@unchecked Sendable` on a bare mutable box, would
+/// silence the diagnostic while leaving the race in place.
+public final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    public init() {}
+
+    public func increment() {
+        lock.lock(); defer { lock.unlock() }
+        value += 1
+    }
+
+    public var current: Int {
+        lock.lock(); defer { lock.unlock() }
+        return value
+    }
+}
+
+/// Appends values from a concurrently-executing closure.
+public final class Recorder<Element>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [Element] = []
+
+    public init() {}
+
+    public func append(_ item: Element) {
+        lock.lock(); defer { lock.unlock() }
+        items.append(item)
+    }
+
+    public var all: [Element] {
+        lock.lock(); defer { lock.unlock() }
+        return items
+    }
+
+    public func filter(_ predicate: (Element) -> Bool) -> [Element] {
+        all.filter(predicate)
+    }
+}
+
 // MARK: - Shared fixtures
 
 public enum Fixtures {

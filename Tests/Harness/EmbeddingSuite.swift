@@ -85,12 +85,12 @@ enum EmbeddingSuite {
 
             test("the indexer produces one vector per chunk in order") { ctx in
                 let chunks = (0..<10).map { SourceChunk(sourceID: "s", notebookID: "n", ordinal: $0, text: "chunk \($0)") }
-                var progressCalls = 0
+                let progressCalls = Counter()
                 let outcome = try await EmbeddingIndexer(provider: BuiltInEmbedder(), batchSize: 3)
-                    .index(chunks: chunks) { _ in progressCalls += 1 }
+                    .index(chunks: chunks) { _ in progressCalls.increment() }
                 try ctx.equal(outcome.embeddings.count, 10)
                 try ctx.equal(outcome.embeddings.map(\.chunkID), chunks.map(\.id), "order preserved")
-                try ctx.check(progressCalls >= 3, "progress reported per batch (got \(progressCalls))")
+                try ctx.check(progressCalls.current >= 3, "progress reported per batch (got \(progressCalls.current))")
                 for embedding in outcome.embeddings {
                     try ctx.equal(embedding.dimensions, 384)
                     try ctx.equal(embedding.model, "builtin-hash-384")

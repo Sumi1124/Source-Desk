@@ -352,11 +352,13 @@ enum EndToEndSuite {
             },
 
             test("a source is re-added rather than duplicated, and refreshed") { ctx in
-                var hits = 0
+                // The handler runs on the server's thread, so the count is kept in a
+                // locked counter rather than a captured `var`.
+                let hits = Counter()
                 let server = LocalHTTPServer { request in
                     if request.path == "/robots.txt" { return .text("User-agent: *\nAllow: /\n") }
-                    hits += 1
-                    return .text(Fixtures.htmlPage(title: "Article", body: "Version \(hits) of the article body with enough words to extract properly."),
+                    hits.increment()
+                    return .text(Fixtures.htmlPage(title: "Article", body: "Version \(hits.current) of the article body with enough words to extract properly."),
                                  contentType: "text/html")
                 }
                 try server.start()
