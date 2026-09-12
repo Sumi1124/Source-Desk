@@ -106,6 +106,22 @@ enum ModelMenuSuite {
                 try ctx.contains(estimated.detailLine, "~131,072")
             },
 
+            test("an empty local Ollama mentions the no-download alternative") { ctx in
+                // "Run ollama pull" alone hides the option that costs nothing. With no
+                // models installed, the user should hear about the hosted route too,
+                // because the difference is a two-gigabyte wait versus an answer now.
+                let server = LocalHTTPServer { _ in .json(["models": []]) }
+                try server.start()
+                defer { server.stop() }
+
+                let provider = OllamaProvider(endpoint: server.baseURL, host: .local, keychain: EmptyKeychain())
+                let availability = await provider.availability()
+                try ctx.check(!availability.isReady, "an empty install is not ready")
+                let reason = try ctx.unwrap(availability.reason)
+                try ctx.contains(reason, "ollama pull", "it says how to get a local model")
+                try ctx.contains(reason, "Ollama Cloud", "and that a hosted model needs no download")
+            },
+
             test("a model with nothing known says where it runs, not a guess") { ctx in
                 try ctx.equal(descriptor("mystery").detailLine, "Cloud model")
                 try ctx.equal(descriptor("mystery", isLocal: true).detailLine, "Local model")

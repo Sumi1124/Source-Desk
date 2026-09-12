@@ -61,6 +61,8 @@ struct HarnessMain {
             BoilerplateSuite.suite,
             ResearchNoteSuite.suite,
             WholeDocumentSuite.suite,
+            LiveLocalModelSuite.suite,
+            LiveModelHarnessSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)

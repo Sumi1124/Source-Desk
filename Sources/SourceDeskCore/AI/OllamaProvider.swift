@@ -90,9 +90,13 @@ public struct OllamaProvider: AIProvider {
         do {
             let models = try await OllamaClient(endpoint: endpoint, apiKey: apiKey).listModels()
             if models.isEmpty {
+                // With nothing installed, `ollama pull` is only half the answer: the user
+                // can also run a hosted model immediately with no download at all. Saying
+                // only "run ollama pull" hides an option that costs nothing, which is the
+                // difference between a two-gigabyte wait and a working answer now.
                 return .unreachable(reason: isCloud
                     ? "the Ollama API returned no models for this account"
-                    : "Ollama is running but no models are installed — run `ollama pull llama3.2`")
+                    : "Ollama is running but has no models installed. Run `ollama pull llama3.2` to download one, or add an Ollama Cloud key to use a hosted model with no download.")
             }
             return .ready
         } catch let error as SourceDeskError {

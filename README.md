@@ -276,6 +276,29 @@ search, study-tool parsing, export/import round trips, settings migration, offli
 behaviour, and full product flows end to end (ingest → retrieve → answer → cite →
 export → import → answer again).
 
+**A test that cannot run is reported as unverified, never as a pass.** Tests needing a
+real model or a live network skip with a reason, and the summary prints them separately:
+
+```
+PASS  20 suites · 207 tests · 1228 assertions · 0 failures · 203 verified
+
+NOT VERIFIED (4 — these could not run in this environment):
+  ~ 20 · Live local model → a real model answers from the sources and cites them
+      no local Ollama model is installed, so grounded answering with a real model is unproven
+```
+
+`203 verified` is a different claim from `0 failures`, and the distinction is the point:
+most of the pipeline is tested with a stub provider, which says nothing about whether a
+real model, given real retrieved passages, actually answers from them. Suite 20 answers
+that question against **whatever Ollama has installed** — including the
+anti-hallucination check, which asks a question the sources cannot answer and requires the
+model to decline rather than invent a figure. Run `ollama pull llama3.2` and it runs for
+real.
+
+Suite 21 keeps that honest in the other direction: it drives the same assertions through a
+scripted Ollama server, so a suite that only ever skips cannot quietly rot into something
+that would fail the moment a model appeared.
+
 ## Project layout
 
 ```

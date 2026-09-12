@@ -39,6 +39,14 @@ public final class TestContext {
         }
     }
 
+    /// Marks the test as not run, with the reason it could not be.
+    ///
+    /// Used for checks that need a real model, a live network or a stored key. Never
+    /// call this to avoid a failure — a test that *can* run and fails must fail.
+    public func skip(_ reason: String) throws -> Never {
+        throw TestSkip(reason)
+    }
+
     public func unwrap<T>(_ value: T?, _ message: String = "expected a value", file: String = #fileID, line: UInt = #line) throws -> T {
         assertions += 1
         guard let value else { throw TestFailure(description: "\(file):\(line) — \(message)") }
@@ -105,6 +113,18 @@ public func test(_ name: String, _ body: @escaping (TestContext) async throws ->
     TestCase(name: name, body: body)
 }
 
+/// Thrown by `TestContext.skip` to mark a test that could not be run in this
+/// environment.
+///
+/// This exists so the harness never implies more coverage than it has. A test that needs
+/// a real model, a network, or an API key is genuinely unverified when those are absent,
+/// and reporting it as a pass would be the same class of dishonesty as showing a guessed
+/// context window as a measured one.
+public struct TestSkip: Error {
+    public let reason: String
+    public init(_ reason: String) { self.reason = reason }
+}
+
 public struct TestSuite {
     public let name: String
     public let cases: [TestCase]
@@ -120,8 +140,11 @@ public struct HarnessResult {
     public var tests = 0
     public var assertions = 0
     public var failures: [(suite: String, test: String, message: String)] = []
+    public var skips: [(suite: String, test: String, reason: String)] = []
 
     public var passed: Bool { failures.isEmpty }
+    /// Tests that ran and passed.
+    public var verified: Int { tests - skips.count - failures.count }
 }
 
 public enum Harness {
@@ -157,6 +180,12 @@ public enum Harness {
                     if verbose {
                         print("  \u{001B}[32m✓\u{001B}[0m \(item.name) \u{001B}[2m(\(context.assertions) checks, \(ms) ms)\u{001B}[0m")
                     }
+                } catch let skip as TestSkip {
+                    result.assertions += context.assertions
+                    result.skips.append((suite.name, item.name, skip.reason))
+                    if verbose {
+                        print("  \u{001B}[33m∼\u{001B}[0m \(item.name) \u{001B}[2m(NOT VERIFIED: \(skip.reason))\u{001B}[0m")
+                    }
                 } catch {
                     result.assertions += context.assertions
                     let message: String
@@ -178,7 +207,15 @@ public enum Harness {
     public static func report(_ result: HarnessResult) -> Int32 {
         print("\n" + String(repeating: "─", count: 64))
         let verdict = result.passed ? "\u{001B}[32mPASS\u{001B}[0m" : "\u{001B}[31mFAIL\u{001B}[0m"
-        print("\(verdict)  \(result.suites) suites · \(result.tests) tests · \(result.assertions) assertions · \(result.failures.count) failures")
+        print("\(verdict)  \(result.suites) suites · \(result.tests) tests · \(result.assertions) assertions · \(result.failures.count) failures · \(result.verified) verified")
+        if !result.skips.isEmpty {
+            // Stated in the summary, not buried: a reader must not mistake "0 failures"
+            // for "everything is proven".
+            print("\nNOT VERIFIED (\(result.skips.count) — these could not run in this environment):")
+            for skip in result.skips {
+                print("  ∼ \(skip.suite) → \(skip.test)\n      \(skip.reason)")
+            }
+        }
         if !result.passed {
             print("\nFailing tests:")
             for failure in result.failures {
