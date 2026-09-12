@@ -30,8 +30,9 @@ jobs:
       - name: Show toolchain
         run: |
           swift --version
-          xcodebuild -version
+          xcodebuild -version 2>&1 | head -3
           sw_vers
+          echo "SDK: $(xcrun --show-sdk-version --sdk macosx)" 
 
       - name: Cache build artifacts
         uses: actions/cache@v4
@@ -41,8 +42,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.runner }}-spm-
 
+      # The compiler's output is captured to a file and echoed on failure, so a build
+      # failure on one runner in the matrix is diagnosable from the job summary instead of
+      # requiring someone to fetch logs.
       - name: Build (debug)
-        run: swift build
+        run: |
+          set -o pipefail
+          if ! swift build 2>&1 | tee /tmp/build.log; then
+            echo "::error::debug build failed"
+            grep -E "error:" /tmp/build.log | head -20 || true
+            exit 1
+          fi
 
       # The harness is a normal executable rather than `swift test`, because
       # SwiftPM's XCTest and swift-testing bundles are not available to this
