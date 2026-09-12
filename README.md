@@ -126,6 +126,27 @@ ollama pull nomic-embed-text # optional: better semantic search
 Then choose **Ollama** in the toolbar and (optionally) set embeddings to
 *Local model* in Settings → Retrieval.
 
+### Research a topic
+
+Command palette (⌘K) → **Research & Add Sources…**, or the **+** menu in the toolbar.
+Give it a topic and SourceDesk searches the web, downloads the top results and indexes
+them as ordinary sources — downloaded, extracted, cleaned, chunked and embedded, exactly
+like a page you pasted in yourself. **Research & Write a Note…** does the same and then
+writes a summary note from what it found.
+
+Two things it deliberately does *not* do:
+
+- **It never builds a source out of a search snippet.** A snippet is a fragment of a
+  results page, not the author's text, so treating it as the source would mean citing
+  words the source never wrote. Every researched source is the real page or it is
+  reported as a failure.
+- **It never saves an empty source.** If a page cannot be downloaded, or downloads but
+  yields no readable text, it is marked failed with an explanation rather than appearing
+  in the sidebar as a source that cites nothing.
+
+A run over several pages is cancellable, shows progress per page, and keeps whatever it
+already indexed when cancelled.
+
 ### Ollama's hosted API
 
 Ollama serves one API from two places: a server on your Mac, and `https://ollama.com`,

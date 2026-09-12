@@ -236,6 +236,12 @@ struct CommandPaletteView: View {
             Command(title: "Refresh Model Lists", symbol: "arrow.clockwise") {
                 Task { await app.refreshAllModels() }
             },
+            Command(title: "Research & Add Sources…", symbol: "magnifyingglass.circle") {
+                app.requestResearch(kind: .addSources)
+            },
+            Command(title: "Research & Create Note…", symbol: "note.text.badge.plus") {
+                app.requestResearch(kind: .createNote)
+            },
             Command(title: "Go to Research", symbol: "bubble.left.and.text.bubble.right") { app.section = .research },
             Command(title: "Go to Sources", symbol: "doc.on.doc") { app.section = .sources },
             Command(title: "Go to Notes", symbol: "note.text") { app.section = .notes },

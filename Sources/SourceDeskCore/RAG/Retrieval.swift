@@ -249,6 +249,39 @@ public struct RetrievalEngine: Sendable {
             }
         }
 
+        // A whole-document request ("summarise this notebook", "list the key points")
+        // is not a relevance question, and its query is synthesised rather than typed by
+        // the user. Such tools ask for everything by setting `minimumScore` to zero.
+        //
+        // When nothing matched at all under that setting, falling back to the notebook's
+        // chunks in document order is the honest reading of the request: the user asked
+        // for the notebook, so the notebook is what should be read. Without this, a
+        // summary failed with "not enough relevant source material" whenever the source
+        // wording happened not to overlap the tool's boilerplate query — which is most of
+        // the time, because the query is not real text.
+        //
+        // The fallback is deliberately gated on `minimumScore <= 0`. A real question
+        // (which keeps the default floor) must still be allowed to answer "nothing
+        // relevant here", rather than being padded with unrelated passages.
+        if fused.isEmpty && configuration.minimumScore <= 0 {
+            let breadth = try store.chunks(notebookID: notebookID)
+                .filter { sourcesByID[$0.sourceID] != nil }
+                .prefix(configuration.candidateCount)
+            guard !breadth.isEmpty else {
+                let trace = RetrievalTrace(
+                    query: trimmedQuery, candidateCount: 0, hits: [], usedTokens: 0,
+                    contextBudget: configuration.contextTokenBudget,
+                    semanticEnabled: semanticEnabled, keywordEnabled: keywordEnabled,
+                    rerankEnabled: false, webResultCount: 0,
+                    notes: notices + ["This notebook has no indexed passages."],
+                    durationMilliseconds: Self.milliseconds(since: started)
+                )
+                return RetrievalOutcome(hits: [], trace: trace, notices: notices)
+            }
+            for chunk in breadth { fused[chunk.id] = 1 }
+            notices.append("No passage matched the query directly, so the notebook's own passages were used in document order.")
+        }
+
         guard !fused.isEmpty else {
             let trace = RetrievalTrace(
                 query: trimmedQuery, candidateCount: 0, hits: [], usedTokens: 0,

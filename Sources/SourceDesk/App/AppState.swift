@@ -367,10 +367,262 @@ public final class AppState {
         reloadNotebooks()
     }
 
-    // MARK: Sources
+    // MARK: - Research (search the web, add the sources, make the note)
 
-    /// Adds sources, showing progress and reporting per-item outcomes.
+    /// What a research run did, so the UI can report it honestly.
+    struct ResearchOutcome: Equatable {
+        var topic: String
+        var searched: Int
+        var added: Int
+        var failed: Int
+        var noteTitle: String?
+        var noteError: String?
+        var wasCancelled: Bool = false
+
+        var summary: String {
+            if wasCancelled { return "Research cancelled — kept \(added) of \(searched) sources." }
+            if added == 0 { return "No sources could be added for “\(topic)”." }
+            var text = "Added \(added) of \(searched) sources for “\(topic)”"
+            if failed > 0 { text += " (\(failed) failed)" }
+            if let noteTitle { text += " · note: \(noteTitle)" }
+            return text + "."
+        }
+    }
+
+    /// The last research run, for a progress sheet or a status line.
+    var researchOutcome: ResearchOutcome?
+
+    /// The running research job, so a long run can be cancelled.
+    private(set) var researchTask: Task<Void, Never>?
+
+    func cancelResearch() {
+        researchTask?.cancel()
+        researchTask = nil
+        ingestion = nil
+    }
+
+    /// Which research sheet the UI should present, if any.
+    ///
+    /// The command palette is dismissed the moment a command runs, so a sheet attached
+    /// to the palette would be torn down with it. The palette asks for the sheet here
+    /// and `RootView` presents it, which keeps the sheet alive for the whole run.
+    var researchRequest: ResearchRequest?
+
+    struct ResearchRequest: Identifiable, Equatable {
+        let id = UUID()
+        var kind: ResearchSheetKind
+    }
+
+    enum ResearchSheetKind: String, Equatable, CaseIterable {
+        case addSources
+        case createNote
+
+        var title: String {
+            switch self {
+            case .addSources: return "Research & Add Sources"
+            case .createNote: return "Research & Create Note"
+            }
+        }
+
+        var prompt: String {
+            switch self {
+            case .addSources:
+                return "Enter a topic. SourceDesk searches the web, then downloads and indexes the top results as sources you can cite."
+            case .createNote:
+                return "Enter a topic. SourceDesk searches the web, adds the top results as sources, then writes a summary note from them."
+            }
+        }
+
+        var noteKind: NoteKind? {
+            switch self {
+            case .addSources: return nil
+            case .createNote: return .summary
+            }
+        }
+    }
+
+    /// Called by the command palette.
+    func requestResearch(kind: ResearchSheetKind) {
+        section = .research
+        researchRequest = ResearchRequest(kind: kind)
+    }
+
+    /// Searches the web for a topic and adds the results as real sources.
+    ///
+    /// This is the "go find me material on X" workflow: it searches, then hands each
+    /// result to the ordinary ingestion pipeline, so a researched source is
+    /// indistinguishable from one the user pasted in — downloaded, extracted, cleaned,
+    /// chunked, embedded and citable.
+    ///
+    /// It deliberately does *not* build sources out of search snippets. A snippet is a
+    /// fragment of marketing copy lifted from a results page, so treating it as the
+    /// source would mean citing text the author never wrote in that form. If a page
+    /// cannot be downloaded, the source is reported as failed rather than quietly
+    /// saved with no content.
+    @discardableResult
+    func researchAndAddSources(
+        topic: String,
+        notebookID: RecordID? = nil,
+        resultCount: Int = 5,
+        createNote: NoteKind? = nil
+    ) -> Task<Void, Never>? {
+        let trimmedTopic = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTopic.isEmpty else { return nil }
+        guard let targetNotebookID = notebookID ?? selectedNotebookID else {
+            lastError = PresentedError(
+                title: "No notebook is open",
+                message: "Research adds its sources to a notebook.",
+                recovery: "Create or open a notebook, then try again."
+            )
+            return nil
+        }
+        guard let service = ingestionService() else {
+            lastError = PresentedError(title: "SourceDesk is not ready", message: "The library is still opening.")
+            return nil
+        }
+        guard let searchProvider = searchProvider else {
+            lastError = PresentedError(
+                title: "Web search is not available",
+                message: "No search provider is configured.",
+                recovery: "Choose a search provider in Settings → Search."
+            )
+            return nil
+        }
+        guard searchProvider.isConfigured else {
+            lastError = PresentedError(
+                title: "\(searchProvider.displayName) needs a configuration",
+                message: searchProvider.configurationHint ?? "This search provider is not ready to use.",
+                recovery: "Open Settings → Search to configure it, or pick a different provider."
+            )
+            return nil
+        }
+
+        let count = min(max(1, resultCount), 20)
+        let chunking = settings.chunkingConfiguration
+
+        // Returned so the caller can cancel or await it; the UI keeps a handle so a
+        // long run over many pages can be stopped.
+        cancelResearch()
+        let task = Task { @MainActor in
+            let searchLimit = count
+            var outcome = ResearchOutcome(topic: trimmedTopic, searched: 0, added: 0, failed: 0)
+            isGenerating = true
+            researchOutcome = nil
+            defer {
+                isGenerating = false
+                ingestion = nil
+                researchOutcome = outcome
+            }
+
+            do {
+                // 1. Search.
+                statusMessage = "Searching the web for “\(trimmedTopic)”…"
+                statusMessage = "Searching the web for “\(trimmedTopic)”…"
+
+                // 2. Ingest each result through the normal pipeline. The core owns the
+                // per-result decisions (dedupe, "downloaded but empty", failures) so the
+                // same rules apply here and in tests.
+                let research = try await service.searchAndIngest(
+                    query: trimmedTopic,
+                    provider: searchProvider,
+                    notebookID: targetNotebookID,
+                    limit: searchLimit
+                ) { [weak self] progress in
+                    let stage = progress.stage.displayName
+                    let title = progress.title
+                    Task { @MainActor in
+                        self?.ingestion = IngestionProgress(
+                            title: title.isEmpty ? trimmedTopic : title,
+                            stage: stage,
+                            overall: progress.itemIndex > 1
+                                ? Double(progress.itemIndex - 1) / Double(max(1, progress.itemCount))
+                                : 0,
+                            itemIndex: progress.itemIndex,
+                            itemCount: progress.itemCount
+                        )
+                    }
+                }
+
+                outcome.searched = research.searched
+                outcome.added = research.added.count
+                outcome.failed = research.failed.count
+                if research.cancelled { outcome.wasCancelled = true }
+                reloadNotebookContent()
+
+                guard outcome.added > 0 else {
+                    statusMessage = "Nothing could be added for “\(trimmedTopic)”"
+                    lastError = PresentedError(
+                        title: "No usable pages",
+                        message: "The search found \(outcome.searched) results, but none could be downloaded and read.",
+                        recovery: "This can happen with JavaScript-only or access-restricted sites. Try a different topic."
+                    )
+                    return
+                }
+
+                // 3. Optional study note, grounded in what was just added.
+                if let noteKind = createNote {
+                    statusMessage = "Writing \(noteKind.displayName)…"
+                    do {
+                        let title = try await makeResearchNote(
+                            topic: trimmedTopic,
+                            kind: noteKind,
+                            notebookID: targetNotebookID
+                        )
+                        outcome.noteTitle = title
+                        statusMessage = "Added \(outcome.added) sources and created “\(title)”."
+                    } catch let error as SourceDeskError {
+                        // The sources are safe; only the note failed. Say so rather than
+                        // implying the whole run was lost.
+                        outcome.noteError = error.errorDescription
+                        statusMessage = "Added \(outcome.added) sources; the note could not be generated."
+                        lastError = PresentedError(error)
+                    }
+                    reloadNotebookContent()
+                } else {
+                    statusMessage = outcome.summary
+                }
+            } catch let error as SourceDeskError {
+                statusMessage = "Research stopped"
+                lastError = PresentedError(error)
+            } catch is CancellationError {
+                outcome.wasCancelled = true
+                statusMessage = outcome.summary
+            } catch {
+                statusMessage = "Research stopped"
+                lastError = PresentedError(title: "Research stopped", message: error.localizedDescription)
+            }
+        }
+        researchTask = task
+        return task
+    }
+
+    /// Generates a study note over a notebook's current sources.
+    ///
+    /// Returns the saved note's title, or throws so the caller can distinguish "the
+    /// sources are fine but the note failed" from "the research failed".
+    private func makeResearchNote(
+        topic: String,
+        kind: NoteKind,
+        notebookID: RecordID
+    ) async throws -> String {
+        guard let study = studyService(notebookID: notebookID) else {
+            throw SourceDeskError.noSources(notebook: selectedNotebook?.title ?? "this notebook")
+        }
+        // Passing no source IDs lets the note cover everything in the notebook, which is
+        // what was just added. `generateOnce` surfaces the failure directly instead of
+        // requiring the caller to walk the event stream for it.
+        let outcome = try await study.generateOnce(
+            tool: kind,
+            notebookID: notebookID,
+            sourceIDs: nil,
+            focus: topic,
+            title: "Research: \(topic)"
+        )
+        return outcome.note.title
+    }
+
     func addSources(_ request: SourceIngestionService.Request, notebookID: RecordID? = nil) {
+
         guard let service = ingestionService(), let id = notebookID ?? selectedNotebookID else { return }
         Task {
             ingestion = IngestionProgress(title: "Preparing", stage: "Queued", overall: 0, itemIndex: 0, itemCount: 1)

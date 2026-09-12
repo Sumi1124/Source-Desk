@@ -13,6 +13,8 @@ public enum HTMLExtractor {
     public struct Options: Sendable {
         public var includeImageAltText: Bool = true
         public var includeCodeBlocks: Bool = true
+        /// Strips a leading navigation/breadcrumb block from the chosen content.
+        public var trimBoilerplateHead: Bool = true
         /// Strips a trailing licence/footer block from the chosen content.
         public var trimBoilerplateTail: Bool = true
         /// Below this many characters of prose we assume client-rendered markup
@@ -54,6 +56,12 @@ public enum HTMLExtractor {
         let contentRoot = ContentSelector.select(root)
         var blocks = BlockExtractor.blocks(from: contentRoot, options: options)
 
+        // Head first: leading chrome is a long list of labels, and leaving it in place
+        // can make the tail trimmer misjudge where the content ends. Both are
+        // conservative and neither can empty a document.
+        if options.trimBoilerplateHead {
+            blocks = BlockExtractor.trimHead(blocks)
+        }
         if options.trimBoilerplateTail {
             blocks = BlockExtractor.trimTail(blocks)
         }
@@ -440,6 +448,95 @@ public enum HTMLExtractor {
                 output.append(block)
             }
             return output
+        }
+
+        /// Drops *leading* navigation furniture that survives container scoring.
+        ///
+        /// Wikipedia is the clearest case: its sidebar language list is a single long
+        /// paragraph of language names that scores as prose, so it becomes the first
+        /// block of the document. The head of a document is exactly what a model weights
+        /// most heavily, so leaving it there feeds the model a list of languages before
+        /// any actual content — and it pollutes embeddings for the whole source.
+        ///
+        /// Conservative by construction, because a document's opening paragraph is
+        /// usually the most important one. A block is only dropped when it is one of:
+        ///
+        ///   * a recognised interface string ("move to sidebar hide", "jump to content"),
+        ///   * a language-list block (many short capitalised tokens, almost no verbs),
+        ///   * a very short block that carries no sentence-ending punctuation,
+        ///
+        /// and the trimming stops at the first block that looks like real prose. It will
+        /// never consume more than a few blocks, and never the whole document.
+        static func trimHead(_ blocks: [ExtractedBlock]) -> [ExtractedBlock] {
+            guard blocks.count > 3 else { return blocks }
+
+            let interfacePhrases = ["jump to content", "move to sidebar", "move to top", "toggle the table of contents",
+                                    "toggle sidebar", "skip to content", "skip to main content", "main menu",
+                                    "toggle navigation", "appearance", "from wikipedia, the free encyclopedia",
+                                    "edit links", "personal tools", "create account", "log in", "search"]
+            let languageNames = ["العربية", "Čeština", "Deutsch", "Ελληνικά", "Español", "Eesti", "Euskara",
+                                 "فارسی", "Suomi", "Français", "עברית", "Magyar", "Italiano", "日本語", "한국어",
+                                 "Nederlands", "Norsk", "Polski", "Português", "Русский", "Shqip", "Svenska",
+                                 "Türkçe", "Українська", "Tiếng Việt", "吴语", "粵語", "中文", "Bahasa", "Dansk",
+                                 "हिन्दी", "Bahasa Indonesia", "Norsk bokmål", "Simple English", "srpski"]
+
+            /// Many short tokens and almost no sentence structure: a list of labels.
+            func looksLikeLabelList(_ text: String) -> Bool {
+                // Count how many of the tokens are language names or single capitals.
+                let tokens = text.split(separator: " ")
+                guard tokens.count >= 8 else { return false }
+                let known = languageNames.reduce(0) { count, name in
+                    count + (text.contains(name) ? 1 : 0)
+                }
+                if known >= 3 { return true }
+                // Otherwise: no sentence-ending punctuation across a long span of words is
+                // a strong signal that this is a menu, not prose.
+                let hasSentencePunctuation = text.contains(". ") || text.hasSuffix(".")
+                return !hasSentencePunctuation && tokens.count >= 25
+            }
+
+            func isInterface(_ text: String) -> Bool {
+                let lowered = text.lowercased()
+                return interfacePhrases.contains { lowered.contains($0) }
+            }
+
+            func isFurniture(_ block: ExtractedBlock) -> Bool {
+                switch block.kind {
+                case .heading:
+                    return false
+                case .listItem:
+                    // A leading list is usually a table of contents or a nav list.
+                    return block.text.count < 200
+                case .paragraph, .quote:
+                    if isInterface(block.text) { return true }
+                    if looksLikeLabelList(block.text) { return true }
+                    // A short fragment with no sentence punctuation.
+                    return block.text.count < 120
+                        && !block.text.contains(". ")
+                        && !block.text.hasSuffix(".")
+                        && !block.text.hasSuffix("?")
+                        && !block.text.hasSuffix("!")
+                default:
+                    return false
+                }
+            }
+
+            var start = 0
+            // Never remove more than the first handful of blocks, and never leave the
+            // document with fewer than two blocks.
+            let limit = min(blocks.count - 2, 6)
+            while start < limit, isFurniture(blocks[start]) {
+                start += 1
+            }
+
+            // Only accept the trim when something substantial remains — otherwise the
+            // "furniture" was probably the content itself.
+            let remaining = blocks[(start)...].reduce(0) { $0 + $1.text.count }
+            let original = blocks.reduce(0) { $0 + $1.text.count }
+            guard remaining >= 200, Double(remaining) >= Double(original) * 0.3 else {
+                return blocks
+            }
+            return Array(blocks[start...])
         }
 
         /// Drops trailing licence/footer/related-content noise that survives scoring.

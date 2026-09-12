@@ -23,17 +23,24 @@ struct RootView: View {
             )
             .navigationSplitViewColumnWidth(min: 200, ideal: Design.sidebarWidth, max: 300)
         } detail: {
-            HStack(spacing: 0) {
-                WorkingAreaView(
-                    onAddWebsite: { addWebsiteVisible = true },
-                    onAddFiles: { presentFileImporter() },
-                    onAddPastedText: { addPastedTextVisible = true }
-                )
-                if app.settings.showInspector {
-                    Divider()
-                    InspectorPanelView()
-                        .frame(width: Design.inspectorWidth)
-                        .background(Color(nsColor: .windowBackgroundColor))
+            VStack(spacing: 0) {
+                if let progress = app.ingestion {
+                    ResearchProgressBar(progress: progress) { app.cancelResearch() }
+                        .padding(.horizontal, Design.spacingMedium)
+                        .padding(.top, Design.spacingSmall)
+                }
+                HStack(spacing: 0) {
+                    WorkingAreaView(
+                        onAddWebsite: { addWebsiteVisible = true },
+                        onAddFiles: { presentFileImporter() },
+                        onAddPastedText: { addPastedTextVisible = true }
+                    )
+                    if app.settings.showInspector {
+                        Divider()
+                        InspectorPanelView()
+                            .frame(width: Design.inspectorWidth)
+                            .background(Color(nsColor: .windowBackgroundColor))
+                    }
                 }
             }
             .toolbar { toolbarContent }
@@ -56,6 +63,17 @@ struct RootView: View {
         }
         .sheet(isPresented: cloudConsentBinding) {
             CloudConsentSheet()
+        }
+        // Research lives here rather than in the command palette, which is dismissed as
+        // soon as its command runs.
+        .sheet(item: $app.researchRequest) { request in
+            ResearchSheet(kind: request.kind) { topic, count in
+                app.researchAndAddSources(
+                    topic: topic,
+                    resultCount: count,
+                    createNote: request.kind.noteKind
+                )
+            }
         }
         .overlay {
             if app.commandPaletteVisible {
@@ -127,12 +145,16 @@ struct RootView: View {
                 Button("Add Files…") { presentFileImporter() }
                 Button("Paste Text…") { addPastedTextVisible = true }
                 Divider()
+                // The agentic shortcuts: find material, then optionally write it up.
+                Button("Research a Topic…") { app.requestResearch(kind: .addSources) }
+                Button("Research & Write a Note…") { app.requestResearch(kind: .createNote) }
+                Divider()
                 Button("Export Notebook…") { exportVisible = true }
                 Button("Import Notebook…") { importVisible = true }
             } label: {
                 Image(systemName: "plus")
             }
-            .help("Add sources or move notebooks")
+            .help("Add sources, research a topic, or move notebooks")
 
             Button {
                 app.updateSettings { $0.showInspector.toggle() }

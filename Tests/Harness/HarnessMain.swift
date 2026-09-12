@@ -57,6 +57,10 @@ struct HarnessMain {
             EndToEndSuite.suite,
             OllamaCloudSuite.suite,
             ModelMenuSuite.suite,
+            ResearchSuite.suite,
+            BoilerplateSuite.suite,
+            ResearchNoteSuite.suite,
+            WholeDocumentSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)

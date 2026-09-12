@@ -188,6 +188,27 @@ protocol AIProvider: Sendable {
 }
 ```
 
+- **Retrieval distinguishes a question from a whole-document request.** A question keeps
+  the score floor, so it is allowed to answer "nothing relevant here" rather than being
+  padded with unrelated text. A whole-document tool ("Summarize", "Key Points",
+  "Outline") has no question — its query is synthesised boilerplate that appears nowhere
+  in the user's sources — so both retrieval channels legitimately return nothing. Those
+  tools set `minimumScore` to zero, and when nothing matches under that setting retrieval
+  falls back to the notebook's own passages in reading order and says so in its notices.
+  Without this, summarising a notebook failed with "not enough relevant source material"
+  whenever the source wording did not happen to overlap the tool's own query.
+
+- **HTMLExtractor trims leading chrome as well as trailing.** Container scoring removes
+  most navigation, but interface text that sits *inside* the content container survives
+  it — Wikipedia's sidebar language list is one long paragraph of language names that
+  scores as prose, so it became the first block of the document. The head of a document
+  is what a model weighs most, so that meant feeding the model a list of languages before
+  any content, and polluting the embeddings for the whole source. `trimHead` is
+  conservative in the same way as the existing `trimTail`: it only drops recognised
+  interface strings, language-list blocks and very short fragments without sentence
+  punctuation, it never consumes more than a handful of blocks, and it is skipped
+  entirely if what remains would be less than 30% of the document.
+
 - **OllamaProvider** covers both a server on the user's machine and Ollama's hosted
   API, which serve the same routes; the only technical difference is the bearer token.
   It reports "not available" separately from "not running" — because the fixes differ

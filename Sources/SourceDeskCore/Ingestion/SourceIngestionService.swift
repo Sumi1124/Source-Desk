@@ -81,7 +81,9 @@ public struct SourceIngestionService: Sendable {
         /// Non-fatal notes, e.g. "embeddings were skipped".
         public var notices: [String]
 
-        public var succeeded: Bool { error == nil && source.status == .ready }
+        /// Whether this source is usable: it has stored text and did not error. A
+        /// source stored without embeddings is `.partial`, which is still usable.
+        public var succeeded: Bool { error == nil && (source.status == .ready || source.status == .partial) }
     }
 
     public struct BatchResult: Sendable {
@@ -164,6 +166,138 @@ public struct SourceIngestionService: Sendable {
         }
 
         return BatchResult(results: results, cancelled: cancelled || Task.isCancelled)
+    }
+
+    // MARK: - Research (search the web, then ingest what it found)
+
+    /// The outcome of a research run.
+    public struct ResearchOutcome: Sendable {
+        /// How many results the search returned.
+        public var searched: Int
+        /// Sources that were downloaded, indexed and are citable.
+        public var added: [Source]
+        /// Results that could not be turned into usable sources.
+        public var failed: [(url: String, error: SourceDeskError?)]
+        /// A human-readable note when nothing could be added.
+        public var notice: String?
+        public var cancelled: Bool = false
+
+        public var succeeded: Bool { !added.isEmpty }
+    }
+
+    /// Searches the web for a topic and ingests the results as real sources.
+    ///
+    /// Every result goes through `ingestWebsite`, so a researched source is exactly like
+    /// one the user pasted in: downloaded (respecting robots.txt), extracted, cleaned,
+    /// chunked, embedded and citable. Nothing is built from a search snippet, because a
+    /// snippet is a fragment of a results page rather than the author's text — treating
+    /// it as the source would put words in the source's mouth.
+    ///
+    /// A result whose page cannot be read is reported in `failed`, never saved as an
+    /// empty source that would look fine in the sidebar and cite nothing.
+    public func searchAndIngest(
+        query: String,
+        provider: SearchProvider,
+        notebookID: RecordID,
+        limit: Int = 5,
+        enrichWithPageContent: Bool = false,
+        progress: (@Sendable (Progress) -> Void)? = nil
+    ) async throws -> ResearchOutcome {
+        let service = WebSearchService(provider: provider, downloader: downloader)
+        let results: [WebSearchResult]
+        do {
+            results = try await service.search(
+                query: query,
+                limit: limit,
+                enrichWithPageContent: enrichWithPageContent
+            ).results
+        } catch let error as SourceDeskError {
+            // "Nothing matched" is an ordinary outcome of a search, not a fault in the
+            // app: `WebSearchService` raises `noSearchResults` for it. Reporting it as a
+            // notice keeps the two apart, so an empty search does not surface as though
+            // something broke.
+            if case .noSearchResults = error {
+                return ResearchOutcome(searched: 0, added: [], failed: [],
+                                       notice: "The search returned no results for “\(query)”. Try different wording.")
+            }
+            throw error
+        }
+
+        guard !results.isEmpty else {
+            return ResearchOutcome(searched: 0, added: [], failed: [],
+                                   notice: "The search returned no results for “\(query)”.")
+        }
+
+        var added: [Source] = []
+        var failed: [(url: String, error: SourceDeskError?)] = []
+        var cancelled = false
+        // The same page can appear more than once (mirrors, query strings, trailing
+        // slashes); ingesting it twice would double its citations.
+        var seen: Set<String> = []
+
+        for (index, result) in results.enumerated() {
+            if Task.isCancelled { cancelled = true; break }
+
+            guard URL(string: result.url)?.host() != nil else {
+                failed.append((result.url, nil))
+                continue
+            }
+            let key = Self.dedupeKey(result.url)
+            if !seen.insert(key).inserted { continue }
+
+            let result_ = await ingestWebsite(
+                url: result.url,
+                title: result.title.isEmpty ? nil : result.title,
+                notebookID: notebookID,
+                index: index,
+                total: results.count,
+                progress: progress
+            )
+
+            // The test of usability is whether the page yielded text, not whether
+            // embeddings ran. A source with `.partial` status has been downloaded,
+            // extracted and chunked but stored without vectors (embeddings are off, or
+            // the embedding model is unavailable) — keyword search still finds it, so it
+            // is a real source. Treating `.partial` as failure would tell the user that
+            // nothing was added while their sources sat in the sidebar.
+            if result_.chunkCount > 0, result_.error == nil {
+                added.append(result_.source)
+            } else {
+                failed.append((result.url, result_.error ?? .emptyExtraction(url: result.url)))
+            }
+        }
+
+        var notice: String?
+        if added.isEmpty {
+            notice = failed.isEmpty
+                ? "Nothing was added for “\(query)”."
+                : "The search found \(results.count) page(s), but none could be downloaded and read."
+        }
+        return ResearchOutcome(searched: results.count, added: added, failed: failed,
+                               notice: notice, cancelled: cancelled)
+    }
+
+    /// Two URLs that differ only by a trailing slash, a fragment or tracking parameters
+    /// point at the same document.
+    static func dedupeKey(_ url: String) -> String {
+        guard var components = URLComponents(string: url.trimmingCharacters(in: .whitespaces)) else {
+            return url.trimmingCharacters(in: .whitespaces).lowercased()
+        }
+        components.fragment = nil
+        let tracking = Set(["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+                            "gclid", "fbclid", "ref", "ref_src"])
+        components.queryItems = components.queryItems?.filter { !tracking.contains($0.name.lowercased()) }
+        if components.queryItems?.isEmpty == true { components.queryItems = nil }
+
+        var path = components.path
+        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        components.path = path
+
+        var host = components.host?.lowercased() ?? ""
+        if host.hasPrefix("www.") { host.removeFirst(4) }
+        components.host = host
+        if components.scheme == "http" { components.scheme = "https" }
+        return components.string ?? url
     }
 
     // MARK: - Websites

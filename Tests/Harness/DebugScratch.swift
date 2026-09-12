@@ -85,6 +85,169 @@ enum DebugScratch {
         }
         if menuSemaphore.wait(timeout: .now() + 60) == .timedOut { print("MENU TIMED OUT") }
 
+        print("")
+        print("--- retrieval: does a generic study-tool query find anything? ---")
+        let retrievalSemaphore = DispatchSemaphore(value: 0)
+        Task {
+            let (store, _) = try Fixtures.temporaryStore()
+            let notebook = try Fixtures.makeNotebook(store, title: "Retrieval probe")
+            let text = "RISC-V was developed in 2010 at the University of California Berkeley. The specification was published openly so any company could implement it without licensing fees. Reduced instruction set computing emerged in the 1970s as a reaction to complex instruction sets."
+            var source = Source(notebookID: notebook.id, kind: .website, title: "RISC-V History",
+                                wordCount: 40, status: .ready)
+            source = try store.upsert(source: source)
+            let chunks = TextChunker.chunk(plainText: text, sourceID: source.id, notebookID: notebook.id, configuration: .default)
+            let embedder = BuiltInEmbedder()
+            let embeddings = chunks.map { ChunkEmbedding(chunkID: $0.id, sourceID: source.id, notebookID: notebook.id, model: embedder.identifier, vector: embedder.embedOne($0.text)) }
+            try store.replaceChunks(sourceID: source.id, notebookID: notebook.id, chunks: chunks, embeddings: embeddings)
+            print("  corpus: \(chunks.count) chunks")
+
+            let retrieval = RetrievalEngine(store: store, embedder: embedder)
+            // What the study tools actually ask for: source-scoped, no score floor.
+            var studyConfig = RetrievalConfiguration()
+            studyConfig.minimumScore = 0
+            studyConfig.sourceIDs = [source.id]
+            studyConfig.resultCount = 16
+            studyConfig.maxChunksPerSource = 10
+            let queries = [
+                ("specific", "RISC-V origins and licensing"),
+                ("keyPoints", "key point finding result important significant evidence detail"),
+                ("outline", "overview purpose main argument conclusion finding result")
+            ]
+            for (label, query) in queries {
+                let outcome = try await retrieval.retrieve(query: query, notebookID: notebook.id, configuration: studyConfig)
+                print("  [\(label)] hits=\(outcome.hits.count)")
+            }
+            // And with the default floor, to show the difference.
+            let floorOutcome = try await retrieval.retrieve(
+                query: "key point finding result important significant evidence detail",
+                notebookID: notebook.id,
+                configuration: RetrievalConfiguration()
+            )
+            print("  [default floor] hits=\(floorOutcome.hits.count)")
+            // What are the actual similarity scores? The semantic channel keeps only
+            // positive cosine scores, which is the suspect.
+            let queryVector = try await embedder.embed(["key point finding result important significant evidence detail"]).first
+            let stored = try store.embeddings(notebookID: notebook.id)
+            print("  stored embeddings: \(stored.count)")
+            for embedding in stored {
+                let score = VectorMath.cosineSimilarity(queryVector!, embedding.vector)
+                print("    cosine for chunk \(embedding.chunkID.prefix(8)) = \(String(format: "%.4f", score))")
+            }
+            // And the keyword channel in isolation.
+            let variants = "key point finding result important significant evidence detail"
+            let keyword = (try? store.keywordSearch(query: variants, notebookID: notebook.id, sourceIDs: [source.id], limit: 40)) ?? []
+            print("  keyword hits: \(keyword.count)")
+            retrievalSemaphore.signal()
+        }
+        if retrievalSemaphore.wait(timeout: .now() + 40) == .timedOut { print("  retrieval probe TIMED OUT") }
+
+        print("--- trim-off comparison on a small synthetic page ---")
+        do {
+            let body = "<p>RISC-V is a free and open standard instruction set architecture based on established reduced instruction set computer principles. It is open and royalty free.</p><p>RISC-V was developed in 2010 at the University of California Berkeley as the fifth generation of the design.</p>"
+            let html = """
+            <html><head><title>RISC-V</title></head><body>
+            <div id="mw-navigation"><div class="vector-menu"><p>Toggle the table of contents RISC-V 31 languages العربية Català Čeština Deutsch Ελληνικά Español Suomi Français עברית Magyar Italiano 日本語 한국어 Nederlands Polski Português Русский Svenska Türkçe Українська 中文 Edit links</p></div></div>
+            <div id="content"><p>Appearance move to sidebar hide</p><p>From Wikipedia, the free encyclopedia</p>\(body)</div>
+            </body></html>
+            """
+            var off = HTMLExtractor.Options()
+            off.trimBoilerplateHead = false
+            off.trimBoilerplateTail = false
+            let offOptions = off
+            if let doc = try? HTMLExtractor.extract(html: html, url: "https://en.wikipedia.org/wiki/RISC-V", options: offOptions) {
+                print("TRIM OFF: \(doc.plainText.count) chars")
+                print("  first 300: \(TextMath.preview(doc.plainText, limit: 300))")
+                print("  blocks: \(doc.blocks.count)")
+                for (i, b) in doc.blocks.prefix(6).enumerated() {
+                    print("    [\(i)] \(b.kind) len=\(b.text.count) \(TextMath.preview(b.text, limit: 60))")
+                }
+            } else {
+                print("TRIM OFF: extraction threw")
+            }
+            if let doc = try? HTMLExtractor.extract(html: html, url: "https://en.wikipedia.org/wiki/RISC-V") {
+                print("TRIM ON:  \(doc.plainText.count) chars")
+                print("  first 200: \(TextMath.preview(doc.plainText, limit: 200))")
+            } else {
+                print("TRIM ON:  extraction threw")
+            }
+        }
+
+        print("--- extractor quality check on a real page ---")
+        // A real saved page, so the extractor is judged on real markup rather than a fixture.
+        let probePath = ProcessInfo.processInfo.environment["SOURCEDESK_PROBE_HTML"]
+            ?? FileManager.default.currentDirectoryPath + "/.build/riscv-sample.html"
+        if let html = try? String(contentsOfFile: probePath, encoding: .utf8),
+           let document = try? HTMLExtractor.extract(html: html, url: "https://en.wikipedia.org/wiki/RISC-V") {
+            let text = document.plainText
+            print("extracted \(text.count) chars, title=\(document.title)")
+            print("FIRST 400 CHARS:")
+            print(String(text.prefix(400)))
+            print("")
+            print("LAST 300 CHARS:")
+            print(String(text.suffix(300)))
+            // What are the LEADING blocks, and how big is each? The head of a document
+            // is what a model weighs most, so furniture here is costly.
+            print("")
+            print("LEADING BLOCKS (index, kind, length, preview):")
+            for (index, block) in document.blocks.prefix(14).enumerated() {
+                let preview = TextMath.preview(block.text, limit: 90)
+                print("  [\(index)] \(block.kind) len=\(block.text.count)  \(preview)")
+            }
+            print("")
+            print("FIRST BLOCK WITH >= 200 CHARS:")
+            if let firstBig = document.blocks.firstIndex(where: { $0.text.count >= 200 }) {
+                print("  index \(firstBig)")
+                print("  \(TextMath.preview(document.blocks[firstBig].text, limit: 200))")
+            }
+        } else {
+            print("(no sample HTML at \(probePath) — skipping)")
+        }
+
+        print("")
+        print("--- LIVE research: real search, real pages ---")
+        guard ProcessInfo.processInfo.environment["SOURCEDESK_LIVE_WEB"] == "1" else {
+            print("(set SOURCEDESK_LIVE_WEB=1 to run)")
+            print("--- done ---")
+            return
+        }
+        let liveSemaphore = DispatchSemaphore(value: 0)
+        Task {
+            let (store, _) = try Fixtures.temporaryStore()
+            let notebook = try Fixtures.makeNotebook(store, title: "Live Research")
+            let provider = DuckDuckGoSearchProvider()
+            let service = SourceIngestionService(
+                store: store,
+                configuration: SourceIngestionService.Configuration(embeddingsEnabled: false)
+            )
+            do {
+                let outcome = try await service.searchAndIngest(
+                    query: "history of the RISC-V instruction set architecture",
+                    provider: provider,
+                    notebookID: notebook.id,
+                    limit: 3
+                )
+                print("searched: \(outcome.searched)  added: \(outcome.added.count)  failed: \(outcome.failed.count)")
+                print("notice:   \(outcome.notice ?? "-")")
+                for source in outcome.added {
+                    let chunks = try store.chunks(sourceID: source.id)
+                    let bytes = source.plainTextBytes
+                    print("  ✓ \(source.title)")
+                    print("      \(source.url ?? "-")")
+                    print("      chunks=\(chunks.count) text=\(bytes) bytes status=\(source.status)")
+                    if let first = chunks.first {
+                        print("      first chunk: \(TextMath.preview(first.text, limit: 110))")
+                    }
+                }
+                for failure in outcome.failed {
+                    print("  ✗ \(failure.url): \(failure.error?.errorDescription ?? "unknown")")
+                }
+            } catch {
+                print("live research threw: \(error)")
+            }
+            liveSemaphore.signal()
+        }
+        if liveSemaphore.wait(timeout: .now() + 150) == .timedOut { print("LIVE TIMED OUT") }
+
         print("--- done ---")
     }
 }

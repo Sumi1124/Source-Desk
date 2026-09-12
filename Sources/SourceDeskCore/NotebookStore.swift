@@ -219,6 +219,23 @@ public final class NotebookStore: @unchecked Sendable {
         try db.scalarInt("SELECT COUNT(*) FROM chunks WHERE notebook_id = ?;", [.text(notebookID)])
     }
 
+    /// Every chunk in a notebook, in reading order.
+    ///
+    /// Ordered by source and then ordinal so the result follows the notebook as a reader
+    /// would move through it — which matters when a whole-document request ("summarise
+    /// this") falls back to breadth rather than relevance, because the model then sees
+    /// the material in its natural sequence instead of an arbitrary one.
+    public func chunks(notebookID: RecordID, limit: Int? = nil) throws -> [SourceChunk] {
+        let sql = """
+        SELECT chunks.* FROM chunks
+        JOIN sources ON sources.id = chunks.source_id
+        WHERE chunks.notebook_id = ?
+        ORDER BY sources.added_at ASC, chunks.ordinal ASC
+        \(limit.map { "LIMIT \($0)" } ?? "");
+        """
+        return try db.query(sql, [.text(notebookID)]) { Self.chunk(from: $0) }
+    }
+
     /// Replaces every chunk and vector for a source in one transaction. Used both
     /// on first ingestion and on re-index (for example after the embedding model
     /// changes), so a re-index can never leave a half-updated source.
