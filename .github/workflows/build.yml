@@ -62,7 +62,19 @@ jobs:
       # project's toolchain constraints. It exits non-zero on any failure, and
       # prints tests it could not run separately from tests that passed.
       - name: Run verification suites
-        run: ./.build/debug/SourceDeskHarness
+        run: |
+          set -o pipefail
+          if ! ./.build/debug/SourceDeskHarness 2>&1 | tee /tmp/tests.log; then
+            # Each failing suite becomes its own annotation, so a failure is diagnosable
+            # without log access — the same reason the build step does this.
+            grep -E "^      " /tmp/tests.log | head -20 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            grep -E "✗" /tmp/tests.log | head -10 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          fi
 
       - name: Build (release)
         run: swift build -c release
