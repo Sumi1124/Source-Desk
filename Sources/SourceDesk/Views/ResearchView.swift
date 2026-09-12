@@ -12,6 +12,12 @@ struct ResearchView: View {
 
     private var session: ChatSession? { chat.currentSession }
 
+    /// The scope to show: the session's, then the notebook's, then the default. One
+    /// source of truth, so the composer, the persisted session and the engine all agree.
+    private var currentStoredScope: AnswerScope {
+        session?.scope ?? app.selectedNotebook?.defaultScope ?? app.settings.defaultAnswerScope
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -39,10 +45,14 @@ struct ResearchView: View {
         .onChange(of: app.selectedSessionID) { _, _ in chat.loadMessages() }
         .onChange(of: app.selectedNotebookID) { _, _ in
             chat.loadMessages()
-            scope = session?.scope ?? app.selectedNotebook?.defaultScope ?? app.settings.defaultAnswerScope
+            scope = currentStoredScope
+        }
+        .onChange(of: app.selectedSessionID) { _, _ in
+            // Switching sessions must show that session's scope, not the previous one's.
+            scope = currentStoredScope
         }
         .onAppear {
-            scope = session?.scope ?? app.selectedNotebook?.defaultScope ?? app.settings.defaultAnswerScope
+            scope = currentStoredScope
         }
     }
 
@@ -82,6 +92,11 @@ struct ResearchView: View {
             .onChange(of: scope) { _, newValue in
                 if let session, session.scope != newValue {
                     app.setSessionScope(session, scope: newValue)
+                } else if session == nil {
+                    // Before a session exists there is nothing to record the choice on,
+                    // so it is stored as the notebook's preference. Otherwise picking
+                    // "Sources + Web" was forgotten the moment it was used.
+                    app.setDefaultScope(newValue)
                 }
             }
 

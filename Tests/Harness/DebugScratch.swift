@@ -141,6 +141,56 @@ enum DebugScratch {
         }
         if retrievalSemaphore.wait(timeout: .now() + 40) == .timedOut { print("  retrieval probe TIMED OUT") }
 
+        print("--- LIVE: does asking with Sources + Web actually search the web? ---")
+        if ProcessInfo.processInfo.environment["SOURCEDESK_LIVE_WEB"] != "1" {
+            print("(set SOURCEDESK_LIVE_WEB=1 to run)")
+        } else {
+            let liveAsk = DispatchSemaphore(value: 0)
+            Task {
+                let (store, _) = try Fixtures.temporaryStore()
+                let notebook = try Fixtures.makeNotebook(store, title: "Live ask")
+                // A notebook WITH a source, so the bug's condition is reproduced: before
+                // the fix, having sources meant the answer never consulted the web.
+                let text = "The Thornbury Inspectorate recorded a decline of 43.5 percent in inspection throughput in 1987."
+                var source = Source(notebookID: notebook.id, kind: .website, title: "Thornbury report",
+                                    wordCount: 20, status: .ready)
+                source = try store.upsert(source: source)
+                let chunks = TextChunker.chunk(plainText: text, sourceID: source.id,
+                                               notebookID: notebook.id, configuration: .default)
+                try store.replaceChunks(sourceID: source.id, notebookID: notebook.id, chunks: chunks, embeddings: [])
+                print("  notebook has \(chunks.count) chunk(s) of its own")
+
+                // Config says notebook-only (the Settings default); the user asked for web.
+                let engine = AnswerEngine(
+                    store: store,
+                    providers: ProviderRegistry(providers: [Fixtures.stubProvider()]),
+                    embedder: BuiltInEmbedder(),
+                    search: WebSearchService(provider: DuckDuckGoSearchProvider()),
+                    configuration: .init(providerID: "ollama", modelName: "stub", scope: .notebookSources),
+                    networkIsOnline: { true }
+                )
+                let outcome = try await engine.answerOnce(
+                    question: "who invented the RISC-V instruction set",
+                    notebookID: notebook.id,
+                    scope: .notebookAndWeb
+                )
+                print("  web results used: \(outcome.trace.webResultCount)")
+                print("  notebook hits:    \(outcome.trace.hits.count)")
+                let webCitations = outcome.citations.filter { $0.kind == .web }
+                print("  web citations:    \(webCitations.count)")
+                for citation in webCitations.prefix(3) {
+                    print("    • \(citation.title) — \(citation.url ?? "-")")
+                }
+                if outcome.trace.webResultCount == 0 {
+                    print("  ✗ WEB SEARCH DID NOT RUN")
+                } else {
+                    print("  ✓ web search ran and its results reached the answer")
+                }
+                liveAsk.signal()
+            }
+            if liveAsk.wait(timeout: .now() + 90) == .timedOut { print("  LIVE ASK TIMED OUT") }
+        }
+
         print("--- trim-off comparison on a small synthetic page ---")
         do {
             let body = "<p>RISC-V is a free and open standard instruction set architecture based on established reduced instruction set computer principles. It is open and royalty free.</p><p>RISC-V was developed in 2010 at the University of California Berkeley as the fifth generation of the design.</p>"

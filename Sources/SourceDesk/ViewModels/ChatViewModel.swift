@@ -111,7 +111,11 @@ final class ChatViewModel {
                 question: trimmed,
                 notebookID: notebookID,
                 sessionID: session.id,
-                history: Array(history)
+                history: Array(history),
+                // The scope chosen in the composer, not the Settings default. Without
+                // this the engine kept running the configured default, so picking
+                // "Sources + Web" saved the choice and then ignored it.
+                scope: workingSession.scope
             ) {
                 switch event {
                 case .stage(let value):

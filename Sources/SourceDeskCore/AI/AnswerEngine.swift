@@ -126,12 +126,19 @@ public struct AnswerEngine: Sendable {
     // MARK: - Asking
 
     /// Runs the full pipeline as an event stream.
+    ///
+    /// - Parameter scope: where this answer may draw material from. Passing it explicitly
+    ///   matters: the scope is a per-session choice the user makes in the composer, while
+    ///   `configuration.scope` is only the *default* from Settings. Relying on the
+    ///   configuration here meant choosing "Sources + Web" was recorded on the session but
+    ///   never reached the engine, so web search silently never ran.
     public func answer(
         question: String,
         notebookID: RecordID,
         sessionID: RecordID?,
         history: [ChatMessage] = [],
-        provider overrideProvider: AIProvider? = nil
+        provider overrideProvider: AIProvider? = nil,
+        scope overrideScope: AnswerScope? = nil
     ) -> AsyncStream<Event> {
         AsyncStream { continuation in
             let task = Task {
@@ -140,7 +147,8 @@ public struct AnswerEngine: Sendable {
                         question: question,
                         notebookID: notebookID,
                         history: history,
-                        provider: overrideProvider
+                        provider: overrideProvider,
+                        scope: overrideScope
                     ) { event in
                         continuation.yield(event)
                     }
@@ -170,9 +178,13 @@ public struct AnswerEngine: Sendable {
         question: String,
         notebookID: RecordID,
         history: [ChatMessage] = [],
-        provider overrideProvider: AIProvider? = nil
+        provider overrideProvider: AIProvider? = nil,
+        scope overrideScope: AnswerScope? = nil
     ) async throws -> AnswerOutcome {
-        try await run(question: question, notebookID: notebookID, history: history, provider: overrideProvider, emit: { _ in })
+        try await run(
+            question: question, notebookID: notebookID, history: history,
+            provider: overrideProvider, scope: overrideScope, emit: { _ in }
+        )
     }
 
     // MARK: - Pipeline
@@ -182,6 +194,7 @@ public struct AnswerEngine: Sendable {
         notebookID: RecordID,
         history: [ChatMessage],
         provider overrideProvider: AIProvider?,
+        scope overrideScope: AnswerScope?,
         emit: @Sendable (Event) -> Void
     ) async throws -> AnswerOutcome {
         let started = Date()
@@ -200,7 +213,9 @@ public struct AnswerEngine: Sendable {
         // 2. Determine what material is allowed.
         let sources = try store.sources(notebookID: notebookID)
         let usableSources = sources.filter { $0.includeInRetrieval && $0.status != .failed }
-        let scope = configuration.scope
+        // An explicitly stated scope is the user's current choice; the configuration's
+        // scope is only the default from Settings.
+        let scope = overrideScope ?? configuration.scope
 
         if scope.usesSources && usableSources.isEmpty && !scope.usesWeb {
             throw SourceDeskError.noSources(notebook: (try? store.notebook(id: notebookID))?.title ?? "This notebook")

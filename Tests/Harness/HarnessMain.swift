@@ -63,6 +63,7 @@ struct HarnessMain {
             WholeDocumentSuite.suite,
             LiveLocalModelSuite.suite,
             LiveModelHarnessSuite.suite,
+            ScopeOverrideSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)
