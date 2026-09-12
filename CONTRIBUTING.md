@@ -6,8 +6,8 @@ built, tested and reviewed, so a change can be merged without a round of questio
 ## Getting set up
 
 ```bash
-git clone https://github.com/<you>/sourcedesk.git
-cd sourcedesk
+git clone https://github.com/Sumi1124/Source-Desk.git
+cd Source-Desk
 swift build            # no dependencies to resolve
 swift run SourceDesk   # launches the app
 ```

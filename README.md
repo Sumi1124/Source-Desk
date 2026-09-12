@@ -77,8 +77,8 @@ Prebuilt binaries are attached to every run of **Actions → Build and test** on
 ## Building
 
 ```bash
-git clone https://github.com/<you>/sourcedesk.git
-cd sourcedesk
+git clone https://github.com/Sumi1124/Source-Desk.git
+cd Source-Desk
 swift build -c release
 open .build/release/SourceDesk
 ```
