@@ -152,11 +152,21 @@ public final class AppState {
     }
 
     private func makeProviders() -> ProviderRegistry {
-        ProviderRegistry(providers: [
-            OllamaProvider(endpoint: settings.ollamaEndpointURL),
+        var providers: [AIProvider] = [
+            OllamaProvider(endpoint: settings.ollamaEndpointURL, host: .local),
             OpenAIProvider(baseURL: settings.openAIBaseURLValue),
             AnthropicProvider(baseURL: settings.anthropicBaseURLValue)
-        ])
+        ]
+        // Ollama's hosted API, or any other remote Ollama host the user configured.
+        // Declared as cloud so consent, offline checks and privacy labelling always
+        // apply to it, regardless of the host it points at.
+        let hosted = OllamaProvider(endpoint: settings.ollamaCloudEndpointURL, host: .cloud)
+        // Guard against listing the same provider twice if both endpoints resolve to
+        // the same kind of host.
+        if !providers.contains(where: { $0.identifier == hosted.identifier }) {
+            providers.append(hosted)
+        }
+        return ProviderRegistry(providers: providers)
     }
 
     // MARK: Services

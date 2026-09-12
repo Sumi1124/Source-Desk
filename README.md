@@ -28,9 +28,10 @@ from Google NotebookLM or any other product.
   vectors, conversations, notes and settings all live in one folder on your Mac.
   Nothing is uploaded by SourceDesk itself. Choose a local model and nothing leaves
   the machine at all.
-- **Local or cloud models.** Ollama on your Mac, OpenAI, or Anthropic Claude.
+- **Local, hosted or cloud models.** Ollama on your Mac, Ollama's hosted API at
+  ollama.com (for models too large to run locally), OpenAI, or Anthropic Claude.
   Switchable per conversation, with an explicit per-notebook confirmation before any
-  source text goes to a cloud provider.
+  source text leaves the Mac.
 - **Optional web search.** Notebook only, notebook + web, or web only — with web
   results always labelled separately from your sources.
 - **Offline mode.** Read sources, search locally, chat with a local model and
@@ -125,6 +126,31 @@ ollama pull nomic-embed-text # optional: better semantic search
 Then choose **Ollama** in the toolbar and (optionally) set embeddings to
 *Local model* in Settings → Retrieval.
 
+### Ollama's hosted API
+
+Ollama serves one API from two places: a server on your Mac, and `https://ollama.com`,
+where the same `/api/tags`, `/api/chat` and `/api/embed` routes run models far too
+large for a laptop (the live catalogue currently lists 20, from `gpt-oss:20b` up to
+`glm-5.1`). SourceDesk supports both.
+
+To use it: create a key at [ollama.com/settings/keys](https://ollama.com/settings/keys),
+then Settings → AI Providers → **Ollama Cloud** → *Add API Key*. The key goes in the
+Keychain like every other credential.
+
+Two details worth knowing, both learned from the live endpoint:
+
+- **The catalogue is readable without a key but generation is not.** SourceDesk
+  therefore shows you what exists before you have a key, and tells you plainly that
+  generation needs one — rather than showing an empty list.
+- **Hosted models report no download size.** Their `size` field is the *uncompressed*
+  weight — `glm-5.3` reports 755 GB — so SourceDesk shows the parameter count (read
+  from the model name, since the catalogue leaves `details` blank) and never presents
+  that figure as a download.
+
+Everything else about it is a cloud provider: it requires the per-notebook
+confirmation, it is disabled by Local-Only Mode, it is refused when you are offline,
+and answers from it are labelled as leaving your Mac.
+
 ### Cloud providers
 
 Settings → AI Providers stores keys in the **macOS Keychain** — never in the
@@ -163,8 +189,8 @@ Question ──► hybrid retrieval (semantic + keyword, fused) ─────�
 
 | Scope | What leaves this Mac |
 |---|---|
-| Local model | Nothing. Model, embeddings and index all run on the Mac. |
-| Cloud model | The retrieved passages and your question, sent to your chosen provider. |
+| Local model (including a server elsewhere on your own network) | Nothing. Model, embeddings and index all run on hardware you control. |
+| Ollama's hosted API, OpenAI, Anthropic | The retrieved passages and your question, sent to your chosen provider. |
 | Web search | Your search query, sent to your chosen search provider. |
 | Everything else | Nothing. No telemetry, no analytics, no accounts, no update pings. |
 

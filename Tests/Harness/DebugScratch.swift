@@ -1,41 +1,55 @@
 import Foundation
 import SourceDeskCore
 
+/// Ad-hoc diagnostics, run explicitly with `--debug-scratch`.
+///
+/// Kept in the repository because it is genuinely useful: it drives the hosted Ollama
+/// API through the same code the app uses, which is how the shape of that endpoint
+/// (blank `details`, unauthenticated catalogue, uncompressed sizes) was established.
 enum DebugScratch {
-    static func run() throws {
-        print("--- duplicate URL ingest ---")
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent("sd-dup-\(UUID().uuidString)")
-        let paths = AppPaths(root: root)
-        let store = try NotebookStore(paths: paths)
-        let notebook = try store.upsert(notebook: Notebook(title: "Dup"))
 
-        let server = LocalHTTPServer { request in
-            if request.path == "/robots.txt" { return .text("User-agent: *\nAllow: /\n") }
-            return .text("<html><body><article><h1>Article</h1><p>A body paragraph with sufficient words to be extracted as real prose from the page.</p></article></body></html>", contentType: "text/html")
-        }
-        try server.start()
-        defer { server.stop() }
+    static func run() {
+        print("--- Ollama Cloud, live ---")
+        let provider = OllamaProvider(endpoint: OllamaProvider.cloudEndpoint, host: .cloud, keychain: EmptyKeychain())
 
-        let service = SourceIngestionService(store: store, configuration: .default, embedder: BuiltInEmbedder())
-        let url = "\(server.baseURL.absoluteString)/page"
+        print("identifier:   \(provider.identifier)")
+        print("displayName:  \(provider.displayName)")
+        print("isLocal:      \(provider.isLocal)")
+        print("isConfigured: \(provider.isConfigured)  (no key in the Keychain)")
+
         let semaphore = DispatchSemaphore(value: 0)
         Task {
-            for round in 1...3 {
-                let result = await service.ingest(request: .website(url: url, title: nil), notebookID: notebook.id)
-                let outcome = result.results.first
-                print("round \(round): sources now =\(try! store.sourceCount(notebookID: notebook.id)) finalURL=\(outcome?.source.url ?? "nil") status=\(outcome?.source.status.rawValue ?? "nil")")
+            let availability = await provider.availability()
+            print("availability: \(availability)")
+
+            // The catalogue is readable without a key, which is what lets the app show
+            // what exists before the user has created one.
+            do {
+                let models = try await provider.availableModels()
+                print("models:       \(models.count)")
+                for model in models {
+                    let params: String = model.parameterSize ?? "-"
+                    let context: Int = model.contextLength ?? 0
+                    let size: String = model.sizeDescription ?? "(not a download)"
+                    print("  \(model.name)  params={\(params)}  ctx=\(context)  size=\(size)")
+                }
+            } catch {
+                print("models failed: \(error)")
             }
-            let all = try! store.sources(notebookID: notebook.id)
-            for s in all { print("  row: id=\(s.id.prefix(8)) url=\(s.url ?? "nil") title=\(s.title) nb=\(s.notebookID.prefix(8))") }
-            print("  direct lookup by url:", try! store.source(matchingURL: "\(server.baseURL.absoluteString)/page", notebookID: notebook.id)?.id.prefix(8) ?? "nil")
-            let raw = try! store.db.query("SELECT id, notebook_id, url FROM sources;") { r in "\(r.string(0)!.prefix(8))|\(r.string(1)!.prefix(8))|\(r.string(2) ?? "NULL")" }
-            for line in raw { print("  raw:", line) }
-            print("  notebook id:", notebook.id.prefix(8))
-            print("  count via query:", try! store.db.scalarInt("SELECT COUNT(*) FROM sources WHERE url = ?;", [.text("\(server.baseURL.absoluteString)/page")]))
+
+            // With no key, generation must say exactly that — not a bare 401.
+            do {
+                _ = try await provider.generate(AIRequest(messages: [.user("hi")], model: "gpt-oss:120b"))
+                print("generate:     UNEXPECTED SUCCESS (is a key configured?)")
+            } catch let error as SourceDeskError {
+                print("generate err: \(error.errorDescription ?? "")")
+                print("  recovery:   \(error.recoverySuggestion ?? "")")
+            } catch {
+                print("generate err: \(error)")
+            }
             semaphore.signal()
         }
-        _ = semaphore.wait(timeout: .now() + 30)
-        try? FileManager.default.removeItem(at: root)
+        if semaphore.wait(timeout: .now() + 45) == .timedOut { print("TIMED OUT") }
         print("--- done ---")
     }
 }

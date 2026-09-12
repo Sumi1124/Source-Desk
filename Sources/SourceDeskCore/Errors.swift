@@ -189,7 +189,7 @@ public enum SourceDeskError: Error, LocalizedError, Equatable, Sendable {
         case .invalidAPIKey:
             return "Re-enter the key in Settings → AI Providers."
         case .providerUnavailable, .providerRejected:
-            return "Check the model name and your account limits, then retry. Your local sources are unaffected."
+            return "Check the model name and your account limits, then retry. A local model will keep working in the meantime, and your sources are unaffected."
         case .providerRateLimited:
             return "Wait a moment and retry, or switch to a local model."
         case .cloudDisabled(let reason):

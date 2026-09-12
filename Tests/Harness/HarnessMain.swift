@@ -55,6 +55,7 @@ struct HarnessMain {
             ArchiveSuite.suite,
             SettingsSuite.suite,
             EndToEndSuite.suite,
+            OllamaCloudSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)

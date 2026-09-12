@@ -2,39 +2,97 @@ import Foundation
 
 // MARK: - Ollama
 
-/// Local inference through a running Ollama server.
+/// Local inference through a running Ollama server, or Ollama's hosted API.
 ///
-/// SourceDesk never installs, downloads or launches Ollama: it detects an existing
-/// install, lists the models the user already has, and otherwise reports exactly
-/// what to run. A research tool should not silently pull a multi-gigabyte model.
+/// Ollama exposes one API from two places: a server on the user's own machine
+/// (`http://localhost:11434`) and `https://ollama.com`, where the same
+/// `/api/tags`, `/api/chat` and `/api/embed` routes run the large models that will
+/// not fit on a laptop. The only differences are the bearer token, and that the
+/// remote host is a third party — which is a privacy difference, not a technical
+/// one, so it is surfaced rather than hidden.
+///
+/// SourceDesk never installs or downloads Ollama, and never pulls a model on the
+/// user's behalf: it detects what is there and says what is missing.
 public struct OllamaProvider: AIProvider {
 
-    public let identifier = "ollama"
-    public let displayName = "Ollama (local)"
-    public let isLocal = true
-    public let endpoint: URL
-
-    public init(endpoint: URL = URL(string: "http://127.0.0.1:11434")!) {
-        self.endpoint = endpoint
+    /// Whether this instance talks to a machine the user controls, or to a remote
+    /// service.
+    ///
+    /// This is stated rather than inferred at the call site, because it is a privacy
+    /// decision, not a networking detail: a provider the user selected as "cloud" must
+    /// keep requiring consent and keep being labelled as leaving the Mac, even if they
+    /// point it at a private host. It also keeps `identifier` stable, which matters
+    /// because sessions and messages record it.
+    public enum Host: Sendable {
+        case local
+        case cloud
     }
 
-    public var isConfigured: Bool { true }
+    public let identifier: String
+    public let displayName: String
+    public let isLocal: Bool
+    public let host: Host
+    public let endpoint: URL
+    public let keychain: KeychainReading
+    /// Injectable for tests: bypasses the keychain.
+    public let explicitKey: String?
+
+    /// The hosted endpoint. Used when a setting asks for the cloud without naming a
+    /// host, and to recognise the cloud when it is named.
+    public static let cloudEndpoint = URL(string: "https://ollama.com")!
+
+    public init(
+        endpoint: URL = URL(string: "http://127.0.0.1:11434")!,
+        host: Host? = nil,
+        keychain: KeychainReading = KeychainService(),
+        explicitKey: String? = nil
+    ) {
+        // Without an explicit choice, a host on the user's own network is local.
+        let resolved = host ?? (Self.isCloudEndpoint(endpoint) ? .cloud : .local)
+        self.host = resolved
+        self.endpoint = endpoint
+        self.keychain = keychain
+        self.explicitKey = explicitKey
+        self.isLocal = resolved == .local
+        self.identifier = resolved == .cloud ? "ollama-cloud" : "ollama"
+        self.displayName = resolved == .cloud ? "Ollama Cloud" : "Ollama (local)"
+    }
+
+    /// True when this instance talks to a remote service rather than a machine the
+    /// user controls.
+    public var isCloud: Bool { host == .cloud }
+
+    /// A host is "the cloud" when it is not on the user's own network.
+    public static func isCloudEndpoint(_ url: URL) -> Bool {
+        !Networking.isPrivateNetworkEndpoint(url)
+    }
+
+    var apiKey: String? {
+        if let explicitKey, !explicitKey.isEmpty { return explicitKey }
+        return keychain.secret(for: KeychainService.Key.ollamaAPIKey)
+    }
+
+    public var isConfigured: Bool { isCloud ? apiKey != nil : true }
 
     public var configurationHint: String? {
-        "Runs models on this Mac. Requires Ollama with at least one model pulled."
+        if isCloud {
+            return "Runs Ollama's hosted models. Requires an API key from ollama.com/settings/keys, stored in the macOS Keychain."
+        }
+        return "Runs models on this Mac. Requires Ollama with at least one model pulled."
     }
 
     // MARK: Availability
 
     public func availability() async -> ProviderAvailability {
-        guard Networking.isLocalEndpoint(endpoint) || endpoint.scheme == "https" else {
-            return .notConfigured(reason: "the endpoint \(endpoint.absoluteString) is not a local address")
+        if isCloud, apiKey == nil {
+            return .notConfigured(reason: "no Ollama API key is stored (Settings → AI Providers)")
         }
         do {
-            let client = OllamaClient(endpoint: endpoint)
-            let models = try await client.listModels()
+            let models = try await OllamaClient(endpoint: endpoint, apiKey: apiKey).listModels()
             if models.isEmpty {
-                return .unreachable(reason: "Ollama is running but no models are installed — run `ollama pull llama3.2`")
+                return .unreachable(reason: isCloud
+                    ? "the Ollama API returned no models for this account"
+                    : "Ollama is running but no models are installed — run `ollama pull llama3.2`")
             }
             return .ready
         } catch let error as SourceDeskError {
@@ -45,21 +103,22 @@ public struct OllamaProvider: AIProvider {
     }
 
     public func availableModels() async throws -> [ModelDescriptor] {
-        let client = OllamaClient(endpoint: endpoint)
-        let models = try await client.listModels()
+        let models = try await OllamaClient(endpoint: endpoint, apiKey: apiKey).listModels()
         return models.map { model in
-            let capabilities = Self.capabilityNote(for: model)
-            return ModelDescriptor(
+            ModelDescriptor(
                 providerID: identifier,
                 name: model.name,
-                sizeDescription: model.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) },
-                parameterSize: model.parameterSize,
+                // Hosted models report their uncompressed size, which has nothing to
+                // do with a download. Showing it as one would be a lie, so the size
+                // is only reported for models that actually live on this Mac.
+                sizeDescription: isCloud ? nil : model.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) },
+                parameterSize: model.parameterSize ?? Self.parameterSizeGuess(for: model.name),
                 quantization: model.quantization,
                 contextLength: model.contextLength ?? Self.contextLength(for: model),
-                isLocal: true,
+                isLocal: isLocal,
                 supportsEmbeddings: Self.isEmbeddingModel(model),
                 supportsStreaming: true,
-                capabilityNote: capabilities
+                capabilityNote: Self.capabilityNote(for: model, isCloud: isCloud)
             )
         }
     }
@@ -67,8 +126,13 @@ public struct OllamaProvider: AIProvider {
     // MARK: Generation
 
     public func generate(_ request: AIRequest) async throws -> AIResponse {
-        let client = try await OllamaClient(endpoint: endpoint)
-            .checkingModel(request.model)
+        // A missing credential and a rejected one need different fixes, so they are
+        // kept distinct rather than both surfacing as a 401 from the server.
+        if isCloud, apiKey == nil {
+            throw SourceDeskError.missingAPIKey(provider: displayName)
+        }
+        let client = try await OllamaClient(endpoint: endpoint, apiKey: apiKey)
+            .checkingModel(request.model, listingErrorIsNotFatal: isCloud)
         let started = Date()
         let payload = try Self.chatPayload(request, stream: false)
         let data = try await client.post(path: "api/chat", payload: payload)
@@ -77,7 +141,7 @@ public struct OllamaProvider: AIProvider {
             throw SourceDeskError.providerRejected(provider: displayName, status: 200, message: "the response was not valid JSON")
         }
         if let error = object["error"] as? String, !error.isEmpty {
-            throw SourceDeskError.localModelMissing(name: request.model, endpoint: endpoint.absoluteString)
+            throw Self.generationError(error, model: request.model, providerName: displayName)
         }
         let message = object["message"] as? [String: Any]
         let text = (message?["content"] as? String) ?? (object["response"] as? String) ?? ""
@@ -97,7 +161,15 @@ public struct OllamaProvider: AIProvider {
             let task = Task {
                 do {
                     let payload = try Self.chatPayload(request, stream: true)
-                    let client = try await OllamaClient(endpoint: endpoint).checkingModel(request.model)
+                    // Fail on a missing credential before dialling out: the streaming
+                    // path opens a connection eagerly, so it cannot ask afterwards.
+                    if isCloud, apiKey == nil {
+                        throw SourceDeskError.missingAPIKey(provider: displayName)
+                    }
+                    // Checking the model first turns "not available" into one clear
+                    // message before any tokens are streamed.
+                    let client = try await OllamaClient(endpoint: endpoint, apiKey: apiKey)
+                        .checkingModel(request.model, listingErrorIsNotFatal: isCloud)
                     let started = Date()
                     continuation.yield(.started(model: request.model))
 
@@ -111,8 +183,7 @@ public struct OllamaProvider: AIProvider {
                     if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                         var body = Data()
                         for try await byte in bytes { body.append(byte) }
-                        throw HTTPClient.errorForStatus(http.statusCode, data: body, provider: displayName,
-                                                        url: client.url(path: "api/chat"))
+                        throw client.errorForStatus(http, data: body, model: request.model, providerName: displayName)
                     }
 
                     for try await line in LineStream(bytes) {
@@ -121,7 +192,8 @@ public struct OllamaProvider: AIProvider {
                         guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8),
                               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
                         if let error = object["error"] as? String, !error.isEmpty {
-                            continuation.finish(throwing: SourceDeskError.localModelMissing(name: request.model, endpoint: endpoint.absoluteString))
+                            continuation.yield(.failed(Self.generationError(error, model: request.model, providerName: self.displayName)))
+                            continuation.finish()
                             return
                         }
                         if let message = object["message"] as? [String: Any] {
@@ -160,7 +232,7 @@ public struct OllamaProvider: AIProvider {
                     continuation.yield(.failed(error))
                     continuation.finish()
                 } catch {
-                    continuation.yield(.failed(HTTPClient.mapError(error, provider: "Ollama", url: endpoint)))
+                    continuation.yield(.failed(HTTPClient.mapError(error, provider: self.displayName, url: self.endpoint)))
                     continuation.finish()
                 }
             }
@@ -168,8 +240,42 @@ public struct OllamaProvider: AIProvider {
         }
     }
 
+    /// Turns an `{"error": "…"}` body into the most specific error available.
+    ///
+    /// Ollama reports an unauthorised request, an unknown model, and a model the
+    /// account cannot run with the same *shape* of message and often the same status,
+    /// so the wording is matched rather than the status code guessed at. Saying "check
+    /// your key" for a typo in a model name would send the user to the wrong place.
+    public static func generationError(_ message: String, model: String, providerName: String) -> SourceDeskError {
+        let lowered = message.lowercased()
+        if lowered.contains("unauthorized") || lowered.contains("invalid api key") || lowered.contains("authentication") {
+            return .invalidAPIKey(provider: providerName)
+        }
+        if lowered.contains("not found") || lowered.contains("no such model") || lowered.contains("does not exist") {
+            return .localModelMissing(name: model, endpoint: providerName)
+        }
+        if lowered.contains("context length") || lowered.contains("too long") || lowered.contains("too many tokens") {
+            return .contextTooLarge(model: model, neededTokens: 0, limitTokens: 0)
+        }
+        if lowered.contains("subscription") || lowered.contains("not available") || lowered.contains("no access") || lowered.contains("forbidden") {
+            return .providerRejected(provider: providerName, status: 403,
+                                     message: "\(message) — this account does not have access to “\(model)”")
+        }
+        if lowered.contains("rate limit") || lowered.contains("too many requests") {
+            return .providerRateLimited(provider: providerName, retryAfter: nil)
+        }
+        return .providerRejected(provider: providerName, status: 0, message: message)
+    }
+
+    /// Convenience for callers that only have an endpoint; prefers the provider name
+    /// the endpoint implies.
+    public static func generationError(_ message: String, model: String, endpoint: URL) -> SourceDeskError {
+        generationError(message, model: model,
+                        providerName: isCloudEndpoint(endpoint) ? "Ollama Cloud" : "Ollama")
+    }
+
     public func embed(_ texts: [String], model: String) async throws -> [[Float]] {
-        try await OllamaClient(endpoint: endpoint).embed(model: model, inputs: texts)
+        try await OllamaClient(endpoint: endpoint, apiKey: apiKey).embed(model: model, inputs: texts)
     }
 
     // MARK: Payload
@@ -205,25 +311,60 @@ public struct OllamaProvider: AIProvider {
         return name.contains("embed") || name.contains("bge") || name.contains("minilm") || name.contains("nomic")
     }
 
-    /// Rough context window estimate when the server does not report one, from the
-    /// parameter count: small models default low, large ones high.
+    /// Rough context window estimate when the server does not report one.
+    ///
+    /// The hosted catalogue returns empty `details`, so the parameter count is read
+    /// from the model's own name: `gpt-oss:120b`, `mistral-large-3:675b`,
+    /// `qwen3.5:397b`. Without this every cloud model would be assumed to hold 8k
+    /// tokens, which would make the app under-fill the context of a model that holds
+    /// far more.
     static func contextLength(for model: OllamaModel) -> Int {
-        guard let parameterSize = model.parameterSize?.lowercased() else { return 8_192 }
-        let value = Double(parameterSize.replacingOccurrences(of: "b", with: "").trimmingCharacters(in: .whitespaces)) ?? 0
-        if value <= 0 { return 8_192 }
-        if value <= 4 { return 8_192 }
-        if value <= 9 { return 32_768 }
-        return 131_072
+        if let parameterSize = model.parameterSize,
+           let window = window(forParameterSize: parameterSize) {
+            return window
+        }
+        if let fromName = parameterSizeGuess(for: model.name),
+           let window = window(forParameterSize: fromName) {
+            return window
+        }
+        return 8_192
     }
 
-    static func capabilityNote(for model: OllamaModel) -> String? {
+    private static func window(forParameterSize parameterSize: String) -> Int? {
+        guard let billions = Double(parameterSize.lowercased()
+            .replacingOccurrences(of: "b", with: "")
+            .replacingOccurrences(of: "m", with: "")
+            .trimmingCharacters(in: .whitespaces)) else { return nil }
+        if billions <= 4 { return 8_192 }
+        if billions <= 9 { return 32_768 }
+        if billions <= 200 { return 131_072 }
+        return 262_144
+    }
+
+    /// Reads a parameter count out of a model name, as the hosted catalogue requires.
+    /// Returns a normalised string such as "120B" or "675B".
+    static func parameterSizeGuess(for name: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "(?i)(\\d+(?:\\.\\d+)?)\\s*([bm])\\b") else { return nil }
+        let range = NSRange(name.startIndex..<name.endIndex, in: name)
+        guard let match = regex.firstMatch(in: name, range: range),
+              let numberRange = Range(match.range(at: 1), in: name),
+              let unitRange = Range(match.range(at: 2), in: name) else { return nil }
+        let unit = name[unitRange].uppercased()
+        // A parameter count is the largest number in the name; a version number such
+        // as "qwen3" or "glm-5.3" has no unit and is therefore never matched.
+        return "\(name[numberRange])\(unit)"
+    }
+
+    static func capabilityNote(for model: OllamaModel, isCloud: Bool) -> String? {
         if isEmbeddingModel(model) { return "Embedding model — use it in Settings → Advanced" }
-        guard let parameterSize = model.parameterSize?.lowercased(), let value = Double(parameterSize.replacingOccurrences(of: "b", with: "")) else {
+        guard let parameterSize = model.parameterSize ?? parameterSizeGuess(for: model.name),
+              let value = Double(parameterSize.lowercased().replacingOccurrences(of: "b", with: "")) else {
             return nil
         }
         if value <= 4 { return "Fast, good for summarising and short questions" }
         if value <= 9 { return "Balanced: solid reasoning at usable speed" }
         if value <= 20 { return "Strong reasoning; needs plenty of memory" }
+        if isCloud { return "Large hosted model: highest quality, runs on Ollama's servers" }
         return "Highest quality; slow on machines without a lot of unified memory"
     }
 }
@@ -231,13 +372,19 @@ public struct OllamaProvider: AIProvider {
 // MARK: - Ollama client
 
 /// Minimal client for the Ollama HTTP API (`/api/tags`, `/api/chat`, `/api/embed`).
+///
+/// The same routes are served by a local install and by `https://ollama.com`, so one
+/// client covers both; the only difference is the bearer token, which is attached
+/// whenever one is configured.
 public struct OllamaClient: Sendable {
 
     public let endpoint: URL
+    public let apiKey: String?
     private let session: URLSession
 
-    public init(endpoint: URL) {
+    public init(endpoint: URL, apiKey: String? = nil) {
         self.endpoint = endpoint
+        self.apiKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? apiKey : nil
         self.session = HTTPClient.session(timeout: 60)
     }
 
@@ -245,18 +392,49 @@ public struct OllamaClient: Sendable {
         endpoint.appendingPathComponent(path)
     }
 
+    private func authorize(_ request: inout URLRequest) {
+        guard let apiKey else { return }
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+    }
+
+    /// Maps an HTTP status onto the right error, preferring Ollama's own message.
+    ///
+    /// The body is read *before* the status is considered, because Ollama uses 403 for
+    /// both "your key is wrong" and "your plan does not include this model", and those
+    /// need different advice. Status is the fallback, not the first answer.
+    public func errorForStatus(_ response: HTTPURLResponse, data: Data, model: String?,
+                               providerName: String? = nil) -> SourceDeskError {
+        let name = providerName ?? (OllamaProvider.isCloudEndpoint(endpoint) ? "Ollama Cloud" : "Ollama")
+        let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+            .flatMap { $0["error"] as? String }
+        if let message, !message.isEmpty {
+            if let model {
+                return OllamaProvider.generationError(message, model: model, providerName: name)
+            }
+            if message.lowercased().contains("unauthorized") {
+                return .invalidAPIKey(provider: name)
+            }
+        }
+        if response.statusCode == 401 || response.statusCode == 403 {
+            return .invalidAPIKey(provider: name)
+        }
+        return HTTPClient.errorForStatus(response.statusCode, data: data, provider: name,
+                                         url: url(path: "/"), retryAfter: HTTPClient.retryAfter(response))
+    }
+
     // MARK: Models
 
     public func listModels() async throws -> [OllamaModel] {
         var request = URLRequest(url: url(path: "api/tags"))
         request.httpMethod = "GET"
+        authorize(&request)
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 throw SourceDeskError.localModelNotRunning(endpoint: endpoint.absoluteString)
             }
             guard (200..<300).contains(http.statusCode) else {
-                throw HTTPClient.errorForStatus(http.statusCode, data: data, provider: "Ollama", url: request.url!)
+                throw errorForStatus(http, data: data, model: nil)
             }
             guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let models = object["models"] as? [[String: Any]] else {
@@ -270,10 +448,20 @@ public struct OllamaClient: Sendable {
         }
     }
 
-    /// Fails early with a clear message when the chosen model is not installed,
-    /// rather than letting the server return an opaque 404 mid-stream.
-    public func checkingModel(_ model: String) async throws -> OllamaClient {
-        let models = try await listModels()
+    /// Fails early with a clear message when the chosen model is not available,
+    /// rather than letting the server return an opaque error mid-stream.
+    ///
+    /// `listingErrorIsNotFatal` exists because the hosted catalogue can succeed while
+    /// the model an account may actually run is a subset of it — a listing is a hint,
+    /// not an entitlement list, so a cloud mismatch is left for the server to judge.
+    public func checkingModel(_ model: String, listingErrorIsNotFatal: Bool = false) async throws -> OllamaClient {
+        let models: [OllamaModel]
+        do {
+            models = try await listModels()
+        } catch {
+            if listingErrorIsNotFatal { return self }
+            throw error
+        }
         guard models.contains(where: { $0.name == model || $0.name.hasPrefix(model + ":") }) else {
             throw SourceDeskError.localModelMissing(name: model, endpoint: endpoint.absoluteString)
         }
@@ -286,6 +474,7 @@ public struct OllamaClient: Sendable {
         var request = URLRequest(url: url(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         do {
             let (data, response) = try await session.data(for: request)
@@ -293,13 +482,7 @@ public struct OllamaClient: Sendable {
                 throw SourceDeskError.localModelNotRunning(endpoint: endpoint.absoluteString)
             }
             if (200..<300).contains(http.statusCode) { return data }
-            // Ollama reports a missing model as 404 with an error body.
-            if http.statusCode == 404,
-               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let message = object["error"] as? String, message.lowercased().contains("not found") {
-                throw SourceDeskError.localModelMissing(name: payload["model"] as? String ?? "model", endpoint: endpoint.absoluteString)
-            }
-            throw HTTPClient.errorForStatus(http.statusCode, data: data, provider: "Ollama", url: request.url!)
+            throw errorForStatus(http, data: data, model: payload["model"] as? String)
         } catch let error as SourceDeskError {
             throw error
         } catch {
@@ -311,6 +494,7 @@ public struct OllamaClient: Sendable {
         var request = URLRequest(url: url(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 300
@@ -367,15 +551,23 @@ public struct OllamaModel: Hashable, Sendable {
         if let size = json["size"] as? Int64 { self.size = size }
         else if let size = json["size"] as? Int { self.size = Int64(size) }
         let details = json["details"] as? [String: Any]
-        self.parameterSize = details?["parameter_size"] as? String
-        self.quantization = details?["quantization_level"] as? String
-        self.family = details?["family"] as? String
+        // The hosted catalogue returns these keys with empty strings rather than
+        // omitting them, so an empty value has to become nil. Otherwise a present-but-
+        // blank field would shadow every fallback that should have filled it in.
+        self.parameterSize = Self.nonEmpty(details?["parameter_size"] as? String)
+        self.quantization = Self.nonEmpty(details?["quantization_level"] as? String)
+        self.family = Self.nonEmpty(details?["family"] as? String)
         // Newer servers expose the model's context window in "model_info".
         if let info = json["model_info"] as? [String: Any] {
             for key in info.keys where key.hasSuffix(".context_length") {
                 if let value = info[key] as? Int { self.contextLength = value; break }
             }
         }
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return value
     }
 }
 
@@ -397,16 +589,25 @@ public final class ProviderRegistry: @unchecked Sendable {
         self.providers = map
     }
 
-    /// Default registry: local-first, with the two cloud providers users asked for.
+    /// Default registry: local-first, with Ollama's hosted API and the two cloud
+    /// providers users asked for.
     public static func standard(
         ollamaEndpoint: URL = URL(string: "http://127.0.0.1:11434")!,
+        ollamaCloudEndpoint: URL = OllamaProvider.cloudEndpoint,
         keychain: KeychainReading = KeychainService()
     ) -> ProviderRegistry {
-        ProviderRegistry(providers: [
-            OllamaProvider(endpoint: ollamaEndpoint),
+        var providers: [AIProvider] = [
+            OllamaProvider(endpoint: ollamaEndpoint, keychain: keychain),
             OpenAIProvider(keychain: keychain),
             AnthropicProvider(keychain: keychain)
-        ])
+        ]
+        // The hosted provider is stated as cloud, so its identity and its privacy
+        // rules do not depend on where the endpoint happens to point.
+        let hosted = OllamaProvider(endpoint: ollamaCloudEndpoint, host: .cloud, keychain: keychain)
+        if hosted.identifier != providers[0].identifier {
+            providers.append(hosted)
+        }
+        return ProviderRegistry(providers: providers)
     }
 
     public func register(_ provider: AIProvider) {

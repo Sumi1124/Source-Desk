@@ -93,6 +93,27 @@ struct ProvidersSettings: View {
                         .font(Design.caption)
                         .foregroundStyle(.orange)
                 }
+
+                LabelledField(
+                    label: "Ollama Cloud endpoint",
+                    help: "Ollama's hosted API serves the same routes at a remote host, for models too large to run on this Mac. Point this at any other remote Ollama host if you prefer. Requires an API key; content sent here leaves this Mac."
+                ) {
+                    HStack {
+                        TextField("https://ollama.com", text: Binding(
+                            get: { app.settings.ollamaCloudEndpoint },
+                            set: { value in app.updateSettings { $0.ollamaCloudEndpoint = value } }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+                        Button("Test Connection") {
+                            Task { await app.loadModels(for: "ollama-cloud", force: true) }
+                        }
+                    }
+                }
+                if let state = app.modelDiscoveryState["ollama-cloud"], !state.isReady {
+                    Text(state.reason ?? "")
+                        .font(Design.caption)
+                        .foregroundStyle(.orange)
+                }
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
@@ -135,8 +156,21 @@ struct ProviderCard: View {
         switch provider.identifier {
         case "openai": return .openAIAPIKey
         case "anthropic": return .anthropicAPIKey
+        case "ollama-cloud": return .ollamaAPIKey
         default: return nil
         }
+    }
+
+    /// Whether this provider needs a credential, which is exactly when it has a
+    /// keychain entry.
+    private var requiresKey: Bool { keychainKey != nil }
+
+    /// A clearer privacy line than a bare local/cloud switch.
+    private var privacyLine: String {
+        if let ollama = provider as? OllamaProvider, ollama.isCloud {
+            return "Runs Ollama's hosted models on ollama.com"
+        }
+        return provider.isLocal ? "Runs on this Mac" : "Sends retrieved passages to a cloud service"
     }
 
     private var isSelected: Bool { app.settings.preferredProviderID == provider.identifier }
@@ -150,7 +184,7 @@ struct ProviderCard: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(provider.displayName)
                         .font(.system(size: 13, weight: .semibold))
-                    Text(provider.isLocal ? "Runs on this Mac" : "Sends retrieved passages to a cloud service")
+                    Text(privacyLine)
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                 }

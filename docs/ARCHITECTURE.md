@@ -188,10 +188,23 @@ protocol AIProvider: Sendable {
 }
 ```
 
-- **OllamaProvider** detects a running server, lists installed models with size,
-  quantisation and parameter count, and reports "not installed" separately from "not
-  running" — because the fixes differ (`ollama pull` vs `ollama serve`). SourceDesk
-  never installs or downloads a model.
+- **OllamaProvider** covers both a server on the user's machine and Ollama's hosted
+  API, which serve the same routes; the only technical difference is the bearer token.
+  It reports "not available" separately from "not running" — because the fixes differ
+  (`ollama pull` vs `ollama serve`). SourceDesk never installs or downloads a model.
+
+  Its **host role is stated, not inferred**. A provider the app registers as `cloud`
+  stays cloud — requiring consent, blocked by Local-Only Mode and by being offline,
+  and labelled as leaving the Mac — even if the user points it at a private address.
+  Inference from the address is only the fallback for a provider constructed without a
+  stated role, and it exists so that a model server on the user's own LAN counts as
+  local: a machine on your network is not a third party.
+
+  It also copes with the hosted catalogue's actual shape, which differs from a local
+  one in two ways that caused real bugs: `details` comes back with its keys present
+  but **empty** (so a blank `parameter_size` must be treated as unknown rather than as
+  a value that shadows the fallback), and the reported `size` is the uncompressed
+  weight, not a download.
 - **OpenAIProvider** speaks `POST /v1/chat/completions` with a configurable base URL,
   so a compliant gateway or self-hosted server works too.
 - **AnthropicProvider** speaks the Messages API with the system prompt as a top-level

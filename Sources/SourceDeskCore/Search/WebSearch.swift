@@ -613,4 +613,30 @@ extension Networking {
         guard let host = url.host()?.lowercased() else { return false }
         return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" || host.hasSuffix(".local")
     }
+
+    /// A machine on the user's own network: loopback, an mDNS name, or a private
+    /// RFC-1918 / link-local address.
+    ///
+    /// This is the distinction that matters for privacy. A model server on the same
+    /// Mac or the same home network is not a third party, so content sent to it has
+    /// not left the user's control. Anything else — including `ollama.com` — is a
+    /// remote service and is treated as such.
+    public static func isPrivateNetworkEndpoint(_ url: URL) -> Bool {
+        if isLocalEndpoint(url) { return true }
+        guard let host = url.host()?.lowercased() else { return false }
+        if host.hasSuffix(".local") || host.hasSuffix(".internal") { return true }
+
+        let parts = host.components(separatedBy: ".")
+        guard parts.count == 4 else { return false }
+        let octets = parts.compactMap { Int($0) }
+        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
+
+        switch (octets[0], octets[1]) {
+        case (10, _): return true                              // 10.0.0.0/8
+        case (192, 168): return true                           // 192.168.0.0/16
+        case (172, 16...31): return true                       // 172.16.0.0/12
+        case (169, 254): return true                           // link-local
+        default: return false
+        }
+    }
 }

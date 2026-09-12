@@ -445,7 +445,7 @@ enum ProviderSuite {
                 let cases: [(Int, String, String)] = [
                     (401, "rejected the stored API key", "Re-enter the key"),
                     (429, "rate limiting", "Wait a moment"),
-                    (500, "unavailable", "Your local sources are unaffected")
+                    (500, "unavailable", "your sources are unaffected")
                 ]
                 for (status, expectedMessage, expectedRecovery) in cases {
                     let server = LocalHTTPServer { _ in
@@ -596,8 +596,11 @@ enum ProviderSuite {
                 try ctx.notNil(registry.provider(id: "anthropic"))
                 try ctx.isNil(registry.provider(id: "not-a-provider"))
                 try ctx.equal(registry.all.first?.identifier, "ollama", "local provider sorts first")
-                try ctx.equal(registry.localProviders.count, 1)
-                try ctx.equal(registry.cloudProviders.count, 2)
+                try ctx.equal(registry.localProviders.count, 1, "only a local Ollama server counts as local")
+                // OpenAI, Anthropic, and Ollama's hosted API.
+                try ctx.equal(registry.cloudProviders.count, 3)
+                try ctx.check(registry.cloudProviders.contains { $0.identifier == "ollama-cloud" },
+                              "the hosted Ollama API is a cloud provider")
             },
 
             test("a provider can be registered later without touching the registry") { ctx in

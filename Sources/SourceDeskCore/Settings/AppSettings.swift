@@ -15,6 +15,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var modelSelection: [String: String]
     /// Endpoint for a local Ollama-compatible server.
     public var ollamaEndpoint: String
+    /// Endpoint for Ollama's hosted API (or any other remote Ollama host).
+    public var ollamaCloudEndpoint: String
     /// Base URL override for OpenAI-compatible gateways.
     public var openAIBaseURL: String
     public var openAIBaseURLOverride: String
@@ -85,6 +87,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         preferredProviderID = "ollama"
         modelSelection = [:]
         ollamaEndpoint = "http://127.0.0.1:11434"
+        ollamaCloudEndpoint = "https://ollama.com"
         openAIBaseURL = "https://api.openai.com/v1"
         openAIBaseURLOverride = ""
         anthropicBaseURL = "https://api.anthropic.com/v1"
@@ -137,6 +140,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     public var ollamaEndpointURL: URL {
         URL(string: ollamaEndpoint) ?? URL(string: "http://127.0.0.1:11434")!
+    }
+
+    public var ollamaCloudEndpointURL: URL {
+        URL(string: ollamaCloudEndpoint) ?? OllamaProvider.cloudEndpoint
     }
 
     public var openAIBaseURLValue: URL {
@@ -219,6 +226,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         preferredProviderID = decode(.preferredProviderID, preferredProviderID)
         modelSelection = decode(.modelSelection, modelSelection)
         ollamaEndpoint = decode(.ollamaEndpoint, ollamaEndpoint)
+        ollamaCloudEndpoint = decode(.ollamaCloudEndpoint, ollamaCloudEndpoint)
         openAIBaseURL = decode(.openAIBaseURL, openAIBaseURL)
         openAIBaseURLOverride = decode(.openAIBaseURLOverride, openAIBaseURLOverride)
         anthropicBaseURL = decode(.anthropicBaseURL, anthropicBaseURL)

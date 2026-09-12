@@ -20,6 +20,7 @@ public struct KeychainService: KeychainReading, Sendable {
     public enum Key: String, CaseIterable, Sendable {
         case openAIAPIKey = "openai.api-key"
         case anthropicAPIKey = "anthropic.api-key"
+        case ollamaAPIKey = "ollama.api-key"
         case braveSearchAPIKey = "brave.api-key"
         case tavilySearchAPIKey = "tavily.api-key"
 
@@ -28,6 +29,7 @@ public struct KeychainService: KeychainReading, Sendable {
             switch self {
             case .openAIAPIKey: return "OpenAI API key"
             case .anthropicAPIKey: return "Anthropic API key"
+            case .ollamaAPIKey: return "Ollama API key"
             case .braveSearchAPIKey: return "Brave Search API key"
             case .tavilySearchAPIKey: return "Tavily API key"
             }
@@ -37,6 +39,7 @@ public struct KeychainService: KeychainReading, Sendable {
             switch self {
             case .openAIAPIKey: return "OpenAI"
             case .anthropicAPIKey: return "Anthropic Claude"
+            case .ollamaAPIKey: return "Ollama Cloud"
             case .braveSearchAPIKey, .tavilySearchAPIKey: return "Web search"
             }
         }
