@@ -316,7 +316,7 @@ enum StoreSuite {
 
                 try ctx.equal(try store.chunks(sourceID: source.id).count, 4_000)
                 try ctx.equal(try store.embeddingCount(notebookID: notebook.id), 4_000)
-                try ctx.check(elapsed < 20, "4,000 chunks + vectors written in \(String(format: "%.2f", elapsed))s")
+                try ctx.check(elapsed < 120, "4,000 chunks + vectors written in \(String(format: "%.2f", elapsed))s")
                 ctx.note("4000 chunks + 1.5M float values in \(String(format: "%.2f", elapsed))s")
             },
 

@@ -122,10 +122,15 @@ enum ChunkingSuite {
                 let chunks = TextChunker.chunk(document: document, sourceID: "s", notebookID: "n")
                 let elapsed = Date().timeIntervalSince(start)
                 try ctx.check(chunks.count > 1_000, "produced \(chunks.count) chunks")
-                // A generous ceiling: this is an unoptimised debug build, and the test
-                // exists to catch pathological blow-ups (quadratic splitting, unbounded
-                // re-scanning), not to benchmark. It runs in ~3s on an idle machine.
-                try ctx.check(elapsed < 45, "chunked in \(String(format: "%.2f", elapsed))s")
+                // A generous ceiling on purpose. A wall-clock threshold in a test measures
+                // the machine as much as the code, and a shared CI runner is far slower and
+                // noisier than a laptop — a tight bound produced an intermittent failure in
+                // CI that never reproduced locally. The test exists to catch pathological
+                // blow-ups (quadratic splitting, unbounded re-scanning), which overshoot
+                // this by orders of magnitude, so it can afford to be loose. It runs in
+                // ~3s on an idle machine; the same reasoning applies to the thresholds in
+                // EndToEndSuite, ExtractionSuite and StoreSuite.
+                try ctx.check(elapsed < 120, "chunked in \(String(format: "%.2f", elapsed))s")
                 ctx.note("\(chunks.count) chunks from ~900 paragraphs in \(String(format: "%.2f", elapsed))s")
             },
 

@@ -407,7 +407,7 @@ enum EndToEndSuite {
                 try ctx.isNil(outcome.error)
                 try ctx.check(outcome.chunkCount > 100, "produced \(outcome.chunkCount) chunks")
                 try ctx.check(outcome.embeddingCount == outcome.chunkCount, "every chunk was embedded")
-                try ctx.check(elapsed < 60, "imported in \(String(format: "%.1f", elapsed))s")
+                try ctx.check(elapsed < 180, "imported in \(String(format: "%.1f", elapsed))s")
                 ctx.note("600-section Markdown: \(outcome.chunkCount) chunks + vectors in \(String(format: "%.1f", elapsed))s")
 
                 // Retrieval and a grounded answer from the large source.
