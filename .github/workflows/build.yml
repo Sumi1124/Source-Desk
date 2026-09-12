@@ -76,6 +76,11 @@ jobs:
     runs-on: macos-14
     needs: test
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # Creating a Release writes to the repository, which the default token cannot do. The
+    # narrower of the two options: `contents: write` is required for a release, and nothing
+    # else here needs any permission at all.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -116,7 +121,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.dmg
-          generate_release_notes: true
+          # A hand-written body rather than generated notes: it states the install steps a
+          # downloader needs, which generated notes would not, and it avoids depending on
+          # the extra API scope that note generation requires.
           body: |
             ### Install
 
