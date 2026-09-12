@@ -49,8 +49,11 @@ jobs:
         run: |
           set -o pipefail
           if ! swift build 2>&1 | tee /tmp/build.log; then
-            echo "::error::debug build failed"
-            grep -E "error:" /tmp/build.log | head -20 || true
+            # Each compiler error becomes its own check annotation, so the reason for a
+            # failure is readable from the API and the PR summary without log access.
+            grep -E "error:" /tmp/build.log | head -15 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
             exit 1
           fi
 
