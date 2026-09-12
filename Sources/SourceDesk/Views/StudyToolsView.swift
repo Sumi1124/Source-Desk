@@ -3,6 +3,7 @@ import SourceDeskCore
 
 /// Study tools: pick a generator, choose the material, read the result as it is
 /// written, and keep it as a note.
+@MainActor
 struct StudyToolsView: View {
     @Environment(AppState.self) private var app
     @Environment(StudyToolsViewModel.self) private var study
@@ -295,6 +296,7 @@ struct StudyToolsView: View {
 // MARK: - Standalone web search
 
 /// The web-search panel: search the internet without involving a conversation.
+@MainActor
 struct SearchPanelView: View {
     @Environment(AppState.self) private var app
     @Environment(SearchPanelViewModel.self) private var search
@@ -388,6 +390,7 @@ struct SearchPanelView: View {
     }
 }
 
+@MainActor
 struct SearchResultRow: View {
     let result: WebSearchResult
     let addSource: () -> Void

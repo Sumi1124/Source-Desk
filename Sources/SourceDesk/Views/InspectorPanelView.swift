@@ -3,6 +3,7 @@ import SourceDeskCore
 
 /// The right column. Its contents follow the selection: a source, a citation, a
 /// note, or the current session's retrieval detail.
+@MainActor
 struct InspectorPanelView: View {
     @Environment(AppState.self) private var app
 
@@ -115,6 +116,7 @@ private struct SourceQuickActions: View {
 
 /// Everything SourceDesk knows about one source: where it came from, what it holds,
 /// how it was processed, and how it will be cited.
+@MainActor
 struct SourceInspector: View {
     @Environment(AppState.self) private var app
     let source: Source
@@ -330,6 +332,7 @@ struct SourceInspector: View {
 
 /// Inspector content while the research section is showing: the citations behind the
 /// answer the user is reading.
+@MainActor
 struct ResearchInspector: View {
     @Environment(AppState.self) private var app
     @Environment(ChatViewModel.self) private var chat
@@ -393,6 +396,7 @@ struct ResearchInspector: View {
 
 /// A full citation with everything needed to verify it: source, page, section,
 /// excerpt, and a way to open the original.
+@MainActor
 struct CitationDetail: View {
     @Environment(AppState.self) private var app
     let citation: Citation
@@ -455,6 +459,7 @@ struct CitationDetail: View {
 
 /// Inspector content for notes: note metadata, and for quiz/flashcards, the
 /// structured items the note carries.
+@MainActor
 struct NotesInspector: View {
     @Environment(AppState.self) private var app
 
@@ -522,6 +527,7 @@ struct NotesInspector: View {
     }
 }
 
+@MainActor
 struct StudyToolsInspector: View {
     @Environment(AppState.self) private var app
     @Environment(StudyToolsViewModel.self) private var study

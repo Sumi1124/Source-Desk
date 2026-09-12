@@ -4,6 +4,7 @@ import SourceDeskCore
 /// Settings, organised around the decisions a user actually makes: which model
 /// answers, whether the web is used, where data lives, what may leave the Mac, how
 /// retrieval behaves, and what the app looks like.
+@MainActor
 struct SettingsView: View {
     @Environment(AppState.self) private var app
 
@@ -32,6 +33,7 @@ struct SettingsView: View {
 
 /// A consistent settings pane wrapper: a scrolling form with a title and a
 /// description, so every pane explains itself before showing controls.
+@MainActor
 struct SettingsPane<Content: View>: View {
     let title: String
     let subtitle: String
@@ -57,6 +59,7 @@ struct SettingsPane<Content: View>: View {
 
 // MARK: - Providers
 
+@MainActor
 struct ProvidersSettings: View {
     @Environment(AppState.self) private var app
 
@@ -144,6 +147,7 @@ struct ProvidersSettings: View {
 }
 
 /// One provider's configuration, with an honest statement of what it can and cannot do.
+@MainActor
 struct ProviderCard: View {
     @Environment(AppState.self) private var app
     let provider: AIProvider
@@ -339,6 +343,7 @@ struct ProviderCard: View {
 
 // MARK: - Search
 
+@MainActor
 struct SearchSettings: View {
     @Environment(AppState.self) private var app
 
@@ -426,6 +431,7 @@ struct SearchSettings: View {
     }
 }
 
+@MainActor
 struct SearchKeyField: View {
     @Environment(AppState.self) private var app
     let key: KeychainService.Key
@@ -467,6 +473,7 @@ struct SearchKeyField: View {
 
 // MARK: - Retrieval
 
+@MainActor
 struct RetrievalSettings: View {
     @Environment(AppState.self) private var app
 
@@ -625,6 +632,7 @@ struct RetrievalSettings: View {
 
 // MARK: - Storage
 
+@MainActor
 struct StorageSettings: View {
     @Environment(AppState.self) private var app
     @State private var stats = StoreStats()
@@ -768,6 +776,7 @@ struct StorageSettings: View {
 
 // MARK: - Privacy
 
+@MainActor
 struct PrivacySettings: View {
     @Environment(AppState.self) private var app
 
@@ -889,6 +898,7 @@ struct PrivacySettings: View {
 
 // MARK: - Appearance
 
+@MainActor
 struct AppearanceSettings: View {
     @Environment(AppState.self) private var app
 
@@ -947,6 +957,7 @@ struct AppearanceSettings: View {
 
 // MARK: - Advanced
 
+@MainActor
 struct AdvancedSettings: View {
     @Environment(AppState.self) private var app
     @State private var logLines: [String] = []
@@ -1093,6 +1104,7 @@ struct AdvancedSettings: View {
 
 // MARK: - About
 
+@MainActor
 struct AboutSettings: View {
     @Environment(AppState.self) private var app
     @State private var stats = StoreStats()

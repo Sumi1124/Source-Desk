@@ -3,6 +3,7 @@ import SourceDeskCore
 
 /// Source management: what is in this notebook, what state each source is in, and
 /// what to do about the ones that failed.
+@MainActor
 struct SourcesView: View {
     @Environment(AppState.self) private var app
 
@@ -461,6 +462,7 @@ struct SourcesView: View {
 }
 
 /// One source row: title, provenance, size, status.
+@MainActor
 struct SourceRow: View {
     @Environment(AppState.self) private var app
     let source: Source
@@ -547,6 +549,7 @@ struct SourceRow: View {
 
 /// Website ingest sheet. Shows the URL, an optional title override, and — before
 /// anything is fetched — what will happen to the page.
+@MainActor
 struct AddWebsiteSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -915,6 +918,7 @@ struct AddWebsiteSheet: View {
 
 /// Paste text sheet. This is the escape hatch for any page the app legitimately
 /// cannot fetch, and it is why "JavaScript-only page" is not a dead end.
+@MainActor
 struct AddPastedTextSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onAdd: (String, String) -> Void

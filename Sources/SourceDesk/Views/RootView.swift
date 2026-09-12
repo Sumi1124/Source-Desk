@@ -3,6 +3,7 @@ import SourceDeskCore
 import UniformTypeIdentifiers
 
 /// The three-column shell: sidebar, working area, inspector.
+@MainActor
 struct RootView: View {
     @Environment(AppState.self) private var app
     @Environment(ChatViewModel.self) private var chat
@@ -203,6 +204,7 @@ struct RootView: View {
 }
 
 /// The centre column.
+@MainActor
 struct WorkingAreaView: View {
     @Environment(AppState.self) private var app
     let onAddWebsite: () -> Void
@@ -273,6 +275,7 @@ struct WorkingAreaView: View {
 
 /// The model picker in the toolbar: switches provider and model in one place, and
 /// states the privacy consequence of the choice.
+@MainActor
 struct ModelMenu: View {
     @Environment(AppState.self) private var app
 
@@ -370,6 +373,7 @@ struct ModelMenu: View {
 
 /// A small, always-visible connectivity state. Offline is not an error condition —
 /// it is a mode, and the app says which features it affects.
+@MainActor
 struct NetworkIndicator: View {
     @Environment(AppState.self) private var app
     @State private var showingDetail = false
@@ -413,6 +417,7 @@ struct NetworkIndicator: View {
 }
 
 /// One-time confirmation before any source text is sent to a cloud provider.
+@MainActor
 struct CloudConsentSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss

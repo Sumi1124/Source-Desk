@@ -2,6 +2,7 @@ import SwiftUI
 import SourceDeskCore
 
 /// Source-grounded chat. The main surface of the application.
+@MainActor
 struct ResearchView: View {
     @Environment(AppState.self) private var app
     @Environment(ChatViewModel.self) private var chat
@@ -341,6 +342,7 @@ struct ResearchView: View {
 
 /// The line above the composer: exactly which model will answer, and what that means
 /// for privacy.
+@MainActor
 struct ModelPrivacyLine: View {
     @Environment(AppState.self) private var app
     let scope: AnswerScope
@@ -373,6 +375,7 @@ struct ModelPrivacyLine: View {
 
 /// The retrieval summary under an answer: what was searched, what was found, how it
 /// was ranked. This is the "show your work" panel that makes answers inspectable.
+@MainActor
 struct RetrievalSummary: View {
     let trace: RetrievalTrace
     @State private var expanded = false
@@ -470,6 +473,7 @@ struct RetrievalSummary: View {
 
 /// A message with its citations. Answer text is rendered with the citation markers
 /// turned into clickable chips that select the source in the inspector.
+@MainActor
 struct MessageView: View {
     @Environment(AppState.self) private var app
     let message: ChatMessage
@@ -613,6 +617,7 @@ struct MessageView: View {
 /// *clickable* and *correctly wrapped*. A hand-rolled flow layout of text fragments
 /// clips any run wider than the column, which is exactly what happens to a real
 /// sentence; text layout is not something to reimplement.
+@MainActor
 struct MarkdownAnswer: View {
     @Environment(AppState.self) private var app
     let text: String
@@ -693,6 +698,7 @@ struct MarkdownAnswer: View {
 }
 
 /// A single citation reference inside answer text.
+@MainActor
 struct CitationChip: View {
     @Environment(AppState.self) private var app
     let marker: String
@@ -741,6 +747,7 @@ struct CitationChip: View {
 }
 
 /// The citation list under an answer: every source actually used, with its excerpt.
+@MainActor
 struct CitationList: View {
     @Environment(AppState.self) private var app
     let citations: [Citation]
@@ -802,6 +809,7 @@ struct CitationList: View {
 /// The in-progress answer, with the current stage named. Streaming is not decoration
 /// here: a local model on a long context genuinely takes a while, and saying which
 /// stage it is in is the difference between "working" and "hung".
+@MainActor
 struct StreamingAnswerView: View {
     let text: String
     let reasoning: String
@@ -1030,6 +1038,7 @@ struct AnswerBlock {
 }
 
 /// Minimal table rendering for Markdown tables in answers.
+@MainActor
 struct TableBlock: View {
     let rows: [String]
 

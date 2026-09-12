@@ -2,6 +2,7 @@ import SwiftUI
 import SourceDeskCore
 
 /// The left column: notebooks, favourites, recent, and a way into Settings.
+@MainActor
 struct SidebarView: View {
     @Environment(AppState.self) private var app
 

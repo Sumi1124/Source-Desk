@@ -72,6 +72,7 @@ enum Design {
 
 /// A section header for an inspector or sidebar group. Uses the platform's own
 /// uppercase caption style rather than a custom treatment.
+@MainActor
 struct SectionHeader: View {
     let title: String
     var trailing: AnyView?
@@ -100,6 +101,7 @@ struct SectionHeader: View {
 }
 
 /// A key/value line used throughout the inspector.
+@MainActor
 struct DetailRow: View {
     let label: String
     let value: String
@@ -123,6 +125,7 @@ struct DetailRow: View {
 }
 
 /// A quiet status pill: a dot plus a short label. No background cards.
+@MainActor
 struct StatusPill: View {
     let text: String
     var color: Color = .secondary
@@ -144,6 +147,7 @@ struct StatusPill: View {
 
 /// Empty states are a first-class part of the product: every one explains what the
 /// panel is for and offers the action that fills it.
+@MainActor
 struct EmptyStateView: View {
     let symbol: String
     let title: String
@@ -196,6 +200,7 @@ struct EmptyStateView: View {
 
 /// Shows a `SourceDeskError` the way the product promises: what happened, and what
 /// to do about it — never a bare "something went wrong".
+@MainActor
 struct ErrorCard: View {
     let title: String
     let message: String
@@ -251,6 +256,7 @@ struct ErrorCard: View {
 
 /// A progress bar for long operations, with the stage named. Cancellation is always
 /// offered, because a 500-page PDF import should never be uninterruptible.
+@MainActor
 struct ProgressBanner: View {
     let title: String
     let stage: String
@@ -295,6 +301,7 @@ struct ProgressBanner: View {
 
 /// The privacy banner. Shown whenever content could leave the Mac, so the user is
 /// never surprised about what a cloud provider receives.
+@MainActor
 struct PrivacyNotice: View {
     let level: PrivacyLevel
     var providerName: String?
@@ -323,6 +330,7 @@ struct PrivacyNotice: View {
 }
 
 /// A labelled field used in the add-source sheet and settings.
+@MainActor
 struct LabelledField<Content: View>: View {
     let label: String
     var help: String?

@@ -3,6 +3,7 @@ import SourceDeskCore
 
 /// Notes: manual notes plus everything the study tools produced, with the
 /// flashcard and quiz renderers for structured material.
+@MainActor
 struct NotesView: View {
     @Environment(AppState.self) private var app
 
@@ -302,6 +303,7 @@ struct NotesView: View {
 }
 
 /// A real flashcard deck: one card at a time, reveal, and progress.
+@MainActor
 struct FlashcardDeck: View {
     let cards: [Flashcard]
     @Binding var index: Int
@@ -367,6 +369,7 @@ struct FlashcardDeck: View {
 }
 
 /// A usable quiz: pick an answer, get told whether it was right and why.
+@MainActor
 struct QuizRunner: View {
     let items: [QuizItem]
     @Binding var answers: [RecordID: Int]

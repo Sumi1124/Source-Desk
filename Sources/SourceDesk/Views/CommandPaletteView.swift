@@ -7,6 +7,7 @@ import SourceDeskCore
 /// notebooks, sources, sessions and notes in the current notebook, plus every
 /// command. Results are ranked so an exact notebook-name match never loses to a
 /// fuzzy command match.
+@MainActor
 struct CommandPaletteView: View {
     @Environment(AppState.self) private var app
 

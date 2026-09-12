@@ -2,6 +2,7 @@ import SwiftUI
 import SourceDeskCore
 
 /// Notebook export, with a preview of exactly what will be written.
+@MainActor
 struct ExportSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss
@@ -144,6 +145,7 @@ struct ExportSheet: View {
 }
 
 /// Notebook import, with a preview of the archive before anything is written.
+@MainActor
 struct ImportSheet: View {
     @Environment(AppState.self) private var app
     @Environment(\.dismiss) private var dismiss

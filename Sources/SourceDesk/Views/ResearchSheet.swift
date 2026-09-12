@@ -5,6 +5,7 @@ import SourceDeskCore
 ///
 /// Presented by `RootView` rather than by the command palette: the palette closes as
 /// soon as a command runs, which would take the sheet with it.
+@MainActor
 struct ResearchSheet: View {
     let kind: AppState.ResearchSheetKind
     let onSubmit: (String, Int) -> Void
@@ -89,6 +90,7 @@ struct ResearchSheet: View {
 
 /// Progress for a running research job, with a cancel button. Long operations must be
 /// interruptible, and research downloads several pages in a row.
+@MainActor
 struct ResearchProgressBar: View {
     let progress: AppState.IngestionProgress
     let onCancel: () -> Void
