@@ -1,6 +1,9 @@
 # Build
 .build/
 build/
+# Release artifacts (disk images produced by scripts/build_dmg.sh)
+dist/
+*.dmg
 *.o
 *.dSYM/
 

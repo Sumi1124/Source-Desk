@@ -3,6 +3,7 @@ name: Build and test
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -45,18 +46,71 @@ jobs:
 
       # The harness is a normal executable rather than `swift test`, because
       # SwiftPM's XCTest and swift-testing bundles are not available to this
-      # project's toolchain constraints. It exits non-zero on any failure.
+      # project's toolchain constraints. It exits non-zero on any failure, and
+      # prints tests it could not run separately from tests that passed.
       - name: Run verification suites
         run: ./.build/debug/SourceDeskHarness
 
       - name: Build (release)
         run: swift build -c release
 
-      - name: Upload the app binary (release build)
-        if: matrix.runner == 'macos-14'
+  # A downloadable .dmg, built only from a tagged commit so a "latest download" link can
+  # point somewhere meaningful. Built once (on the older runner, so the artifact runs on
+  # every supported macOS) rather than per-runner, because a disk image is architecture-
+  # and version-independent and two of them would just be confusing.
+  package:
+    name: Package (dmg)
+    runs-on: macos-14
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            # A manual run has no tag, so the version comes from the Info.plist the
+            # build script writes. Keeps the image name honest about its contents.
+            echo "value=1.0.0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the app bundle
+        run: |
+          swift build -c release
+          ./scripts/build_app.sh release
+
+      # The layout step drives Finder, which needs a window server. On a runner that
+      # silently does nothing and the image is still built — the script is written to
+      # tolerate that rather than fail the release over cosmetics.
+      - name: Build the disk image
+        run: ./scripts/build_dmg.sh "${{ steps.version.outputs.value }}" dist
+
+      - name: Upload the disk image
         uses: actions/upload-artifact@v4
         with:
-          name: SourceDesk-release-${{ github.sha }}
-          path: .build/release/SourceDesk
+          name: SourceDesk-${{ steps.version.outputs.value }}-dmg
+          path: dist/*.dmg
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
+
+      # A tag produces a GitHub Release, which is what a "download SourceDesk" link should
+      # point at: it is versioned, permanent, and keeps its own download counter.
+      - name: Attach the disk image to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.dmg
+          generate_release_notes: true
+          body: |
+            ### Install
+
+            1. Download `SourceDesk-${{ steps.version.outputs.value }}.dmg` below.
+            2. Open it and drag **SourceDesk** to your Applications folder.
+            3. The first launch needs **right-click → Open**, because the app is not
+               notarised by Apple (that needs a paid Developer ID). You only do this once.
+
+            SourceDesk asks for no account and no telemetry. See the README for what it
+            stores and where.
