@@ -200,6 +200,150 @@ public struct DuckDuckGoSearchProvider: SearchProvider {
     }
 }
 
+// MARK: - DuckDuckGo Instant Answer API
+
+/// DuckDuckGo's *documented* API — the one with a real endpoint instead of a page.
+///
+/// It is worth being precise about what this is, because the name invites a wrong
+/// assumption: DuckDuckGo publishes no general web search API. `api.duckduckgo.com` is an
+/// Instant Answer API. It returns an abstract (usually Wikipedia), disambiguation entries,
+/// categories and related topics — not the list of ten blue links a search engine shows.
+/// So it is excellent for "what is X" and poor for "recent news about X", and the app says
+/// as much rather than letting the difference surprise the user.
+///
+/// The advantage is that it needs no key, no account and no scraping: it is a documented,
+/// permitted endpoint returning JSON. The HTML endpoint used by `DuckDuckGoSearchProvider`
+/// is the opposite trade — real web results, but parsed out of markup.
+public struct DuckDuckGoInstantAnswerProvider: SearchProvider {
+
+    public let identifier = "duckduckgo-api"
+    public let displayName = "DuckDuckGo Instant Answer API"
+    public let requiresKey = false
+    public let isConfigured = true
+    public let configurationHint: String? =
+        "No API key needed. Returns DuckDuckGo's instant answers and related topics — good for encyclopedic topics, not for news or general web search."
+
+    public var privacyNote: String {
+        "Queries go to api.duckduckgo.com over HTTPS. No account, no key, no tracking."
+    }
+
+    private let session: URLSession
+
+    public init() {
+        self.session = HTTPClient.session(timeout: 30)
+    }
+
+    public func search(query: String, limit: Int = 8) async throws -> [WebSearchResult] {
+        var components = URLComponents(string: "https://api.duckduckgo.com/")!
+        components.queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "no_html", value: "1"),
+            URLQueryItem(name: "no_redirect", value: "1"),
+            URLQueryItem(name: "skip_disambig", value: "0")
+        ]
+        guard let url = components.url else {
+            throw SourceDeskError.webSearchUnavailable(provider: displayName, reason: "could not build the query URL")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(Networking.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw HTTPClient.mapError(error, provider: displayName, url: url)
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw SourceDeskError.webSearchUnavailable(provider: displayName, reason: "no HTTP response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw HTTPClient.errorForStatus(http.statusCode, data: data, provider: displayName, url: url)
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SourceDeskError.webSearchUnavailable(provider: displayName, reason: "the response was not valid JSON")
+        }
+        let results = Self.parse(json: json, query: query, limit: limit)
+        guard !results.isEmpty else {
+            throw SourceDeskError.noSearchResults(query: query)
+        }
+        return results
+    }
+
+    /// Flattens the API's shape into ordinary results.
+    ///
+    /// The payload is a tree: an `Abstract`, then `Results`, then `RelatedTopics` whose
+    /// entries may themselves contain a `Topics` array. All four sources of text are real
+    /// material, so all four are used, with a real `FirstURL` required — an entry with no
+    /// link cannot be cited, so it is not returned.
+    public static func parse(json: [String: Any], query: String, limit: Int) -> [WebSearchResult] {
+        var results: [WebSearchResult] = []
+        var seen = Set<String>()
+
+        func append(title: String, url: String, snippet: String, score: Double) {
+            let trimmedURL = url.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedURL.isEmpty, let host = URL(string: trimmedURL)?.host() else { return }
+            // Related topics frequently point back into DuckDuckGo itself
+            // (duckduckgo.com/RISC-V_ecosystem, /c/Some_Category). Those are navigation
+            // pages on the search engine, not sources — downloading one would store the
+            // search engine's own index page as a "source", which is exactly the thin
+            // content this app exists to avoid.
+            guard host != "duckduckgo.com", !host.hasSuffix(".duckduckgo.com") else { return }
+            guard seen.insert(trimmedURL).inserted else { return }
+            results.append(WebSearchResult(
+                title: title.isEmpty ? trimmedURL : title,
+                url: trimmedURL,
+                snippet: snippet,
+                content: snippet,
+                score: score,
+                siteName: URL(string: trimmedURL)?.host()
+            ))
+        }
+
+        // The abstract, when there is one, is the best single answer available.
+        if let abstract = json["AbstractText"] as? String, !abstract.isEmpty {
+            let url = (json["AbstractURL"] as? String) ?? ""
+            let heading = (json["Heading"] as? String) ?? query
+            append(title: heading, url: url, snippet: abstract, score: 1.0)
+        }
+
+        if let definition = json["Definition"] as? String, !definition.isEmpty {
+            append(title: (json["DefinitionSource"] as? String) ?? query,
+                   url: (json["DefinitionURL"] as? String) ?? "", snippet: definition, score: 0.9)
+        }
+
+        func take(_ raw: [[String: Any]], baseScore: Double) {
+            for (index, entry) in raw.enumerated() {
+                // A grouped entry holds its own Topics; recurse rather than skip.
+                if let nested = entry["Topics"] as? [[String: Any]] {
+                    take(nested, baseScore: baseScore - 0.05)
+                    continue
+                }
+                guard let text = entry["Text"] as? String, !text.isEmpty else { continue }
+                guard let url = entry["FirstURL"] as? String else { continue }
+                // DuckDuckGo titles related topics as "Heading - detail"; the heading is a
+                // better title than the whole sentence.
+                let title: String
+                if let separator = text.range(of: " - ") {
+                    title = String(text[text.startIndex..<separator.lowerBound])
+                } else {
+                    title = String(text.prefix(80))
+                }
+                append(title: title, url: url, snippet: text,
+                       score: baseScore - Double(index) * 0.01)
+            }
+        }
+
+        take((json["Results"] as? [[String: Any]]) ?? [], baseScore: 0.95)
+        take((json["RelatedTopics"] as? [[String: Any]]) ?? [], baseScore: 0.8)
+
+        return Array(results.prefix(limit))
+    }
+}
+
 // MARK: - Brave
 
 /// Brave Search API — a documented, keyed, per-query-priced service.
@@ -471,6 +615,7 @@ public enum SearchProviderFactory {
         switch choice {
         case .none: return nil
         case .duckduckgo: return DuckDuckGoSearchProvider()
+        case .duckduckgoInstantAnswer: return DuckDuckGoInstantAnswerProvider()
         case .brave: return BraveSearchProvider(keychain: keychain)
         case .tavily: return TavilySearchProvider(keychain: keychain)
         }
@@ -480,13 +625,15 @@ public enum SearchProviderFactory {
 public enum SearchEngine: String, Codable, CaseIterable, Sendable {
     case none
     case duckduckgo
+    case duckduckgoInstantAnswer
     case brave
     case tavily
 
     public var displayName: String {
         switch self {
         case .none: return "Off"
-        case .duckduckgo: return "DuckDuckGo (no key)"
+        case .duckduckgo: return "DuckDuckGo search (no key)"
+        case .duckduckgoInstantAnswer: return "DuckDuckGo API (no key)"
         case .brave: return "Brave Search API"
         case .tavily: return "Tavily"
         }
@@ -496,6 +643,7 @@ public enum SearchEngine: String, Codable, CaseIterable, Sendable {
         switch self {
         case .none: return "none"
         case .duckduckgo: return "duckduckgo"
+        case .duckduckgoInstantAnswer: return "duckduckgo-api"
         case .brave: return "brave"
         case .tavily: return "tavily"
         }
@@ -511,7 +659,8 @@ public enum SearchEngine: String, Codable, CaseIterable, Sendable {
     public var detail: String {
         switch self {
         case .none: return "Web search is switched off. Answers use your sources only."
-        case .duckduckgo: return "No API key needed. Page text is fetched separately, respecting robots.txt."
+        case .duckduckgo: return "No API key needed. Real web results, parsed from DuckDuckGo's HTML endpoint; page text is fetched separately, respecting robots.txt."
+        case .duckduckgoInstantAnswer: return "No API key needed. DuckDuckGo's documented JSON API — instant answers, categories and related topics. Best for encyclopedic topics; it does not return general web results."
         case .brave: return "Independent index, API key required. Cheap and reliable."
         case .tavily: return "Results include extracted page content, so answers need fewer extra fetches."
         }

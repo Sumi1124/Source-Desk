@@ -191,6 +191,45 @@ enum DebugScratch {
             if liveAsk.wait(timeout: .now() + 90) == .timedOut { print("  LIVE ASK TIMED OUT") }
         }
 
+        print("--- LIVE: the DuckDuckGo Instant Answer API through the app's provider ---")
+        if ProcessInfo.processInfo.environment["SOURCESK_LIVE_WEB"] != "1"
+            && ProcessInfo.processInfo.environment["SOURCEDESK_LIVE_WEB"] != "1" {
+            print("(set SOURCEDESK_LIVE_WEB=1 to run)")
+        } else {
+            let ddgSemaphore = DispatchSemaphore(value: 0)
+            Task {
+                let provider = DuckDuckGoInstantAnswerProvider()
+                for query in ["RISC-V", "industrial revolution", "asdjkhqweoiu zzzz"] {
+                    do {
+                        let results = try await provider.search(query: query, limit: 5)
+                        print("  query \(TextMath.preview(query, limit: 26)): \(results.count) result(s)")
+                        for result in results.prefix(3) {
+                            print("    • \(TextMath.preview(result.title, limit: 50))")
+                            print("      \(result.url)")
+                        }
+                    } catch let error as SourceDeskError {
+                        print("  query \(TextMath.preview(query, limit: 26)): \(error.errorDescription ?? "error")")
+                    } catch {
+                        print("  query \(TextMath.preview(query, limit: 26)): \(error)")
+                    }
+                }
+
+                // And the HTML endpoint, which is what topic search uses, for comparison.
+                let html = DuckDuckGoSearchProvider()
+                do {
+                    let results = try await html.search(query: "risc-v history", limit: 5)
+                    print("  HTML endpoint: \(results.count) result(s)")
+                    for result in results.prefix(3) {
+                        print("    • \(TextMath.preview(result.title, limit: 50)) — \(result.url)")
+                    }
+                } catch {
+                    print("  HTML endpoint failed: \(error)")
+                }
+                ddgSemaphore.signal()
+            }
+            if ddgSemaphore.wait(timeout: .now() + 90) == .timedOut { print("  DDG PROBE TIMED OUT") }
+        }
+
         print("--- trim-off comparison on a small synthetic page ---")
         do {
             let body = "<p>RISC-V is a free and open standard instruction set architecture based on established reduced instruction set computer principles. It is open and royalty free.</p><p>RISC-V was developed in 2010 at the University of California Berkeley as the fifth generation of the design.</p>"

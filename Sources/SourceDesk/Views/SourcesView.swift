@@ -308,9 +308,25 @@ struct AddWebsiteSheet: View {
 
     let onAdd: (String, String?) -> Void
 
+    /// Two ways in: paste an address, or describe what you want and let the search plus
+    /// the selected AI find candidate pages. The second exists because "I want sources
+    /// about X" is the actual starting point for research, and asking the user to go and
+    /// find URLs first puts the work back on them.
+    private enum Mode: String, CaseIterable {
+        case address
+        case topic
+
+        var label: String { self == .address ? "Address" : "Find by topic" }
+    }
+
+    @State private var mode: Mode = .address
     @State private var urlText = ""
     @State private var titleText = ""
     @State private var urlPreview: URLPreview?
+    @State private var topicText = ""
+    @State private var keepCount = 4
+    /// Which of the AI's picks the user has left ticked.
+    @State private var approved: Set<String> = []
 
     private struct URLPreview {
         var host: String
@@ -323,65 +339,297 @@ struct AddWebsiteSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Add a website")
                     .font(.system(size: 15, weight: .semibold))
-                Text("SourceDesk downloads the page, extracts the readable text, and stores it on this Mac.")
+                Text(mode == .address
+                     ? "SourceDesk downloads the page, extracts the readable text, and stores it on this Mac."
+                     : "Describe a topic. DuckDuckGo finds candidates, your selected AI model chooses the useful ones, and SourceDesk downloads what you approve.")
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            LabelledField(label: "Address", help: "A full http:// or https:// address.") {
-                TextField("https://example.com/article", text: $urlText)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { add() }
-            }
-
-            LabelledField(label: "Title (optional)", help: "Leave empty to use the page's own title.") {
-                TextField("Title", text: $titleText)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            if let preview = urlPreview {
-                VStack(alignment: .leading, spacing: 4) {
-                    if preview.isDuplicate {
-                        HStack(spacing: 5) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.orange)
-                            Text("Already in this notebook — re-adding refreshes the stored copy.")
-                                .font(Design.caption)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    DetailRow(label: "Host", value: preview.host)
-                    if !preview.path.isEmpty {
-                        DetailRow(label: "Path", value: preview.path, monospaced: true)
-                    }
+            Picker("Mode", selection: $mode) {
+                ForEach(Mode.allCases, id: \.self) { value in
+                    Text(value.label).tag(value)
                 }
-                .padding(Design.spacingSmall)
-                .background(RoundedRectangle(cornerRadius: Design.rowCornerRadius).fill(Color(nsColor: .controlBackgroundColor)))
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
 
-            VStack(alignment: .leading, spacing: 4) {
-                Label("The page is fetched once, now, and stored locally.", systemImage: "checkmark.circle")
-                Label("robots.txt is respected; a site that refuses automated access is reported, not bypassed.", systemImage: "hand.raised")
-                Label("Sign-in and paywalled pages cannot be read — save those as a PDF and import the file.", systemImage: "lock")
-            }
-            .font(Design.caption)
-            .foregroundStyle(.secondary)
-
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Add Website") { add() }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if mode == .topic {
+                topicModeContent
+            } else {
+                addressModeContent
             }
         }
         .padding(Design.spacingLarge)
-        .frame(width: 520)
+        .frame(width: 580)
         .onChange(of: urlText) { _, _ in updatePreview() }
+        .onChange(of: mode) { _, _ in
+            // Switching modes abandons a half-finished discovery so the two cannot be
+            // mistaken for one another.
+            app.cancelDiscovery()
+            app.discoveryPlan = nil
+            approved = []
+        }
         .onAppear { updatePreview() }
     }
+
+    // MARK: Address mode
+
+    @ViewBuilder
+    private var addressModeContent: some View {
+        LabelledField(label: "Address", help: "A full http:// or https:// address.") {
+            TextField("https://example.com/article", text: $urlText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { add() }
+        }
+
+        LabelledField(label: "Title (optional)", help: "Leave empty to use the page's own title.") {
+            TextField("Title", text: $titleText)
+                .textFieldStyle(.roundedBorder)
+        }
+
+        if let preview = urlPreview {
+            VStack(alignment: .leading, spacing: 4) {
+                if preview.isDuplicate {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                        Text("Already in this notebook — re-adding refreshes the stored copy.")
+                            .font(Design.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                DetailRow(label: "Host", value: preview.host)
+                if !preview.path.isEmpty {
+                    DetailRow(label: "Path", value: preview.path, monospaced: true)
+                }
+            }
+            .padding(Design.spacingSmall)
+            .background(RoundedRectangle(cornerRadius: Design.rowCornerRadius).fill(Color(nsColor: .controlBackgroundColor)))
+        }
+
+        VStack(alignment: .leading, spacing: 4) {
+            Label("The page is fetched once, now, and stored locally.", systemImage: "checkmark.circle")
+            Label("robots.txt is respected; a site that refuses automated access is reported, not bypassed.", systemImage: "hand.raised")
+            Label("Sign-in and paywalled pages cannot be read — save those as a PDF and import the file.", systemImage: "lock")
+        }
+        .font(Design.caption)
+        .foregroundStyle(.secondary)
+
+        HStack {
+            Spacer()
+            Button("Cancel") { dismiss() }
+            Button("Add Website") { add() }
+                .buttonStyle(.borderedProminent)
+                .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    // MARK: Find-by-topic mode
+
+    @ViewBuilder
+    private var topicModeContent: some View {
+        if let reason = app.discoveryUnavailableReason {
+            // Say what is missing *before* the user types a topic, rather than letting them
+            // press the button and get a failure.
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                Text(reason)
+                    .font(Design.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+            }
+        }
+
+        LabelledField(label: "Topic", help: "What you want sources about.") {
+            TextField("e.g. \"causes of the industrial decline\"", text: $topicText)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { plan() }
+        }
+
+        HStack(spacing: Design.spacingSmall) {
+            Text("Results to keep")
+                .font(Design.caption)
+                .foregroundStyle(.secondary)
+            Picker("Results to keep", selection: $keepCount) {
+                ForEach([2, 3, 4, 6, 8], id: \.self) { Text("\($0)").tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 70)
+            Text("the AI picks this many from the search results")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+            Spacer()
+            if app.discoveryPlan != nil {
+                Button("Search Again") { plan() }
+                    .controlSize(.small)
+            }
+        }
+
+        progressSection
+        planSection
+
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Searching uses DuckDuckGo, which needs no key.", systemImage: "magnifyingglass")
+            Label("Your topic and the search result titles are sent to \(app.currentProvider?.displayName ?? "your model") so it can choose between them.", systemImage: "sparkles")
+            Label("Nothing is downloaded until you approve a result.", systemImage: "checkmark.circle")
+        }
+        .font(.system(size: 10))
+        .foregroundStyle(.tertiary)
+        .fixedSize(horizontal: false, vertical: true)
+
+        HStack {
+            Spacer()
+            Button("Cancel") {
+                app.cancelDiscovery()
+                dismiss()
+            }
+            Button(planButtonTitle) { plan() }
+                .disabled(topicText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                          || app.discoveryUnavailableReason != nil
+                          || isWorking)
+            Button("Add \(approved.count) Selected") { addSelected() }
+                .buttonStyle(.borderedProminent)
+                .disabled(approved.isEmpty || isWorking)
+        }
+    }
+
+    private var isWorking: Bool {
+        switch app.discoveryPhase {
+        case .searching, .askingAI, .fetching: return true
+        case .idle, .planning, .done: return false
+        }
+    }
+
+    private var planButtonTitle: String {
+        switch app.discoveryPhase {
+        case .planning, .done: return "Search Again"
+        default: return "Find Sources"
+        }
+    }
+
+    @ViewBuilder
+    private var progressSection: some View {
+        switch app.discoveryPhase {
+        case .idle:
+            EmptyView()
+        case .fetching(let index, let total, let title):
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: Design.spacingSmall) {
+                    ProgressView().controlSize(.small)
+                    Text("Downloading \(index) of \(total)").font(.system(size: 11, weight: .medium))
+                    Spacer()
+                    Button("Cancel") { app.cancelDiscovery() }.controlSize(.small)
+                }
+                Text(title).font(Design.caption).foregroundStyle(.secondary).lineLimit(1)
+                ProgressView(value: Double(index - 1), total: Double(max(1, total)))
+                    .progressViewStyle(.linear)
+            }
+            .padding(Design.spacingSmall)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        default:
+            HStack(spacing: Design.spacingSmall) {
+                ProgressView().controlSize(.small)
+                Text(app.discoveryPhase.label).font(.system(size: 11))
+                Spacer()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var planSection: some View {
+        if let plan = app.discoveryPlan {
+            VStack(alignment: .leading, spacing: 6) {
+                if let notice = plan.aiNotice {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                        Text(notice)
+                            .font(Design.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if plan.keptCount > 0 {
+                    Text("The model chose these \(plan.keptCount) from \(plan.searchedCount) results.")
+                        .font(.system(size: 11, weight: .medium))
+                }
+
+                if plan.queryWasRewritten {
+                    Text("Searched for “\(plan.query)”")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+
+                if plan.selections.isEmpty {
+                    Text("Nothing was selected. Try different wording.")
+                        .font(Design.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(plan.selections, id: \.result.id) { selection in
+                                resultRow(selection)
+                                Divider()
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 240)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func resultRow(_ selection: SourceDiscoveryService.Selection) -> some View {
+        let isOn = approved.contains(selection.result.url)
+        HStack(alignment: .top, spacing: Design.spacingSmall) {
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { value in
+                    if value { approved.insert(selection.result.url) }
+                    else { approved.remove(selection.result.url) }
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selection.result.title.isEmpty ? selection.result.url : selection.result.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(2)
+                Text(selection.result.url)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let reason = selection.reason {
+                    HStack(alignment: .top, spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tint)
+                        Text(reason)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Design.spacingSmall)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+    }
+
+    // MARK: Actions
 
     private func updatePreview() {
         let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -399,6 +647,24 @@ struct AddWebsiteSheet: View {
         let title = titleText.trimmingCharacters(in: .whitespacesAndNewlines)
         onAdd(trimmed, title.isEmpty ? nil : title)
         dismiss()
+    }
+
+    private func plan() {
+        let trimmed = topicText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        approved = []
+        app.planSources(topic: trimmed, keep: keepCount)
+    }
+
+    private func addSelected() {
+        guard let plan = app.discoveryPlan else { return }
+        let chosen = plan.selections
+            .filter { approved.contains($0.result.url) }
+            .map(\.result)
+        guard !chosen.isEmpty else { return }
+        // The sheet stays open so progress is visible; it closes with Cancel/Close once
+        // the download reports finished.
+        app.addPlannedSources(chosen)
     }
 }
 

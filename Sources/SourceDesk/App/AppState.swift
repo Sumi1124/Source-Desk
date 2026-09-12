@@ -392,6 +392,155 @@ public final class AppState {
     /// The last research run, for a progress sheet or a status line.
     var researchOutcome: ResearchOutcome?
 
+    /// What a "find sources about X" run is doing, for the sheet.
+    enum DiscoveryPhase: Equatable {
+        case idle
+        case searching
+        case askingAI
+        case planning(kept: Int, searched: Int)
+        case fetching(index: Int, total: Int, title: String)
+        case done(added: Int, failed: Int)
+
+        var label: String {
+            switch self {
+            case .idle: return ""
+            case .searching: return "Searching DuckDuckGo…"
+            case .askingAI: return "Asking the model which results are relevant…"
+            case .planning(let kept, let searched):
+                return "Selected \(kept) of \(searched) results"
+            case .fetching(let index, let total, _):
+                return "Downloading \(index) of \(total)"
+            case .done(let added, let failed):
+                return failed > 0 ? "\(added) added, \(failed) failed" : "Added \(added)"
+            }
+        }
+    }
+
+    var discoveryPhase: DiscoveryPhase = .idle
+    /// The plan a discovery run produced, kept so the sheet can list what the AI chose.
+    var discoveryPlan: SourceDiscoveryService.Plan?
+    private var discoveryTask: Task<Void, Never>?
+
+    /// Builds the discovery service, or explains what is missing.
+    func discoveryService() -> SourceDiscoveryService? {
+        guard let provider = currentProvider, !settings.model(for: provider.identifier).isEmpty else { return nil }
+        guard let search = webSearch else { return nil }
+        return SourceDiscoveryService(
+            search: search,
+            provider: provider,
+            model: settings.model(for: provider.identifier)
+        )
+    }
+
+    /// Why discovery cannot run, phrased for the user.
+    var discoveryUnavailableReason: String? {
+        if searchProvider == nil || settings.searchEngine == .none {
+            return "Search is switched off. Choose a search provider in Settings → Search."
+        }
+        if currentProvider == nil {
+            return "No AI model is selected. Choose one in the toolbar."
+        }
+        if let provider = currentProvider, settings.model(for: provider.identifier).isEmpty {
+            return "\(provider.displayName) has no model chosen. Pick one in the toolbar."
+        }
+        return nil
+    }
+
+    /// Searches for a topic and asks the model to choose which results to keep.
+    ///
+    /// Stops at the plan: nothing is downloaded until the user confirms, because the point
+    /// of showing the AI's choices is to let a bad choice be corrected before pages are
+    /// fetched.
+    @discardableResult
+    func planSources(topic: String, keep: Int) -> Task<Void, Never>? {
+        guard let service = discoveryService() else {
+            lastError = PresentedError(
+                title: "Cannot search for sources",
+                message: discoveryUnavailableReason ?? "No AI model is available.",
+                recovery: "Choose a model in the toolbar, or add an API key in Settings → AI Providers."
+            )
+            return nil
+        }
+        discoveryTask?.cancel()
+        discoveryPhase = .searching
+        discoveryPlan = nil
+
+        let task = Task { @MainActor in
+            do {
+                discoveryPhase = .askingAI
+                let plan = try await service.plan(topic: topic, limit: keep)
+                discoveryPlan = plan
+                discoveryPhase = .planning(kept: plan.keptCount, searched: plan.searchedCount)
+                if let notice = plan.aiNotice {
+                    statusMessage = notice
+                } else if plan.keptCount > 0 {
+                    statusMessage = "The model selected \(plan.keptCount) of \(plan.searchedCount) results."
+                }
+            } catch let error as SourceDeskError {
+                discoveryPhase = .idle
+                lastError = PresentedError(error)
+            } catch {
+                discoveryPhase = .idle
+                lastError = PresentedError(title: "Search failed", message: error.localizedDescription)
+            }
+        }
+        discoveryTask = task
+        return task
+    }
+
+    /// Downloads and indexes the results the user approved.
+    func addPlannedSources(_ selection: [WebSearchResult], notebookID: RecordID? = nil) {
+        let targetNotebookID = notebookID ?? selectedNotebookID
+        guard let targetNotebookID, let service = ingestionService() else { return }
+        guard !selection.isEmpty else { return }
+
+        discoveryTask?.cancel()
+        let results = Array(selection.prefix(24))
+        let task = Task { @MainActor in
+            var added = 0
+            var failed = 0
+            isGenerating = true
+            defer {
+                isGenerating = false
+                ingestion = nil
+                discoveryPhase = .done(added: added, failed: failed)
+            }
+            for (index, result) in results.enumerated() {
+                if Task.isCancelled { break }
+                discoveryPhase = .fetching(index: index + 1, total: results.count,
+                                          title: result.title.isEmpty ? result.url : result.title)
+                ingestion = IngestionProgress(
+                    title: result.title.isEmpty ? result.url : result.title,
+                    stage: "Downloading and indexing",
+                    overall: Double(index) / Double(results.count),
+                    itemIndex: index + 1,
+                    itemCount: results.count
+                )
+                let outcome = await service.ingestWebsite(
+                    url: result.url,
+                    title: result.title.isEmpty ? nil : result.title,
+                    notebookID: targetNotebookID,
+                    index: index,
+                    total: results.count,
+                    progress: nil
+                )
+                if outcome.succeeded, outcome.chunkCount > 0 { added += 1 } else { failed += 1 }
+                reloadNotebookContent()
+            }
+            statusMessage = failed > 0
+                ? "Added \(added) source(s); \(failed) could not be read."
+                : "Added \(added) source(s) from the web."
+        }
+        discoveryTask = task
+    }
+
+    func cancelDiscovery() {
+        discoveryTask?.cancel()
+        discoveryTask = nil
+        ingestion = nil
+        discoveryPhase = .idle
+    }
+
     /// The running research job, so a long run can be cancelled.
     private(set) var researchTask: Task<Void, Never>?
 

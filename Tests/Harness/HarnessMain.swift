@@ -64,6 +64,8 @@ struct HarnessMain {
             LiveLocalModelSuite.suite,
             LiveModelHarnessSuite.suite,
             ScopeOverrideSuite.suite,
+            SourceDiscoverySuite.suite,
+            DuckDuckGoAPISuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)
