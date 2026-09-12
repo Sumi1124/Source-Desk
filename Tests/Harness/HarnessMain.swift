@@ -66,6 +66,7 @@ struct HarnessMain {
             ScopeOverrideSuite.suite,
             SourceDiscoverySuite.suite,
             DuckDuckGoAPISuite.suite,
+            FindSourcesFlowSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)

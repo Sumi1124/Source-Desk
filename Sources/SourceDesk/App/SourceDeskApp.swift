@@ -142,6 +142,8 @@ extension Notification.Name {
     static let addWebsite = Notification.Name("sourcedesk.addWebsite")
     static let addFiles = Notification.Name("sourcedesk.addFiles")
     static let addPastedText = Notification.Name("sourcedesk.addPastedText")
+    /// Open the Sources pane's find-by-topic panel.
+    static let openFindSources = Notification.Name("sourcedesk.openFindSources")
 }
 
 extension AppearanceMode {

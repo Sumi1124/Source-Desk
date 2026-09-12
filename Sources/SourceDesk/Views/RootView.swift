@@ -141,12 +141,18 @@ struct RootView: View {
             .help("Command palette (⌘K)")
 
             Menu {
+                Button("Find Sources by Topic…") {
+                    app.section = .sources
+                    NotificationCenter.default.post(name: .openFindSources, object: nil)
+                }
                 Button("Add Website…") { addWebsiteVisible = true }
                 Button("Add Files…") { presentFileImporter() }
                 Button("Paste Text…") { addPastedTextVisible = true }
                 Divider()
-                // The agentic shortcuts: find material, then optionally write it up.
-                Button("Research a Topic…") { app.requestResearch(kind: .addSources) }
+                // Research adds the top results without asking; Find Sources shows the
+                // AI's picks for approval first. Both are useful, so both are offered and
+                // named for the difference.
+                Button("Research a Topic (auto-add)…") { app.requestResearch(kind: .addSources) }
                 Button("Research & Write a Note…") { app.requestResearch(kind: .createNote) }
                 Divider()
                 Button("Export Notebook…") { exportVisible = true }

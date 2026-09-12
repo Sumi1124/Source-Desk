@@ -41,6 +41,16 @@ struct SourcesView: View {
         }
     }
 
+    // MARK: Find sources by topic, inline
+
+    /// Whether the topic panel is open. Kept here rather than in a sheet because searching
+    /// for sources is a first-class way to build a notebook, not an aside: the results
+    /// belong next to the source list they are about to join.
+    @State private var topicPanelOpen = false
+    @State private var topicText = ""
+    @State private var keepCount = 4
+    @State private var approved: Set<String> = []
+
     private var visibleSources: [Source] {
         var list = app.sources
         switch filter {
@@ -74,14 +84,19 @@ struct SourcesView: View {
             header
             Divider()
 
+            if topicPanelOpen {
+                topicPanel
+                    .padding(.top, Design.spacingSmall)
+            }
+
             if app.sources.isEmpty {
                 EmptyStateView(
                     symbol: "tray",
                     title: "No sources in this notebook",
-                    message: "Add websites, PDFs, documents or pasted text. There is no limit on how many — add as much as your disk allows.",
-                    primaryAction: ("Add a Website", onAddWebsite),
-                    secondaryAction: ("Add Files", onAddFiles),
-                    footnote: "You can also paste text, or drop files onto this window."
+                    message: "Add websites, PDFs, documents or pasted text — or describe a topic and let the AI find sources for you. There is no limit on how many.",
+                    primaryAction: ("Find Sources by Topic", { topicPanelOpen = true }),
+                    secondaryAction: ("Add a Website", onAddWebsite),
+                    footnote: "You can also add files, paste text, or drop files onto this window."
                 )
             } else {
                 List(selection: sourceSelection) {
@@ -120,6 +135,9 @@ struct SourcesView: View {
                     )
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openFindSources)) { _ in
+            topicPanelOpen = true
         }
         .confirmationDialog("Remove all sources?", isPresented: $confirmDeleteAll) {
             Button("Remove all \(app.sources.count) sources", role: .destructive) {
@@ -161,6 +179,15 @@ struct SourcesView: View {
             .labelsHidden()
             .frame(width: 130)
 
+            Button {
+                topicPanelOpen.toggle()
+                if !topicPanelOpen { app.cancelDiscovery() }
+            } label: {
+                Label("Find Sources", systemImage: "sparkle.magnifyingglass")
+            }
+            .controlSize(.small)
+            .help("Search for sources about a topic, with the AI choosing which results to keep")
+
             Menu {
                 Button("Add Website…", action: onAddWebsite)
                 Button("Add Files…", action: onAddFiles)
@@ -178,6 +205,224 @@ struct SourcesView: View {
         .padding(.horizontal, Design.spacingMedium)
         .padding(.vertical, Design.spacingSmall)
         .searchable(text: $searchText, placement: .toolbar, prompt: "Search sources")
+    }
+
+    // MARK: Find-by-topic panel
+
+    @ViewBuilder
+    private var topicPanel: some View {
+        VStack(alignment: .leading, spacing: Design.spacingSmall) {
+            HStack(spacing: Design.spacingSmall) {
+                Image(systemName: "sparkle.magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tint)
+                Text("Find sources by topic")
+                    .font(.system(size: 12, weight: .semibold))
+                Spacer()
+                Button {
+                    topicPanelOpen = false
+                    app.cancelDiscovery()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+            }
+
+            Text("DuckDuckGo finds candidates and your selected AI model chooses the useful ones. Nothing is downloaded until you approve it.")
+                .font(Design.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let reason = app.discoveryUnavailableReason {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                    Text(reason)
+                        .font(Design.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: Design.spacingSmall) {
+                TextField("Topic, e.g. “causes of the industrial decline”", text: $topicText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { runTopicSearch() }
+                Picker("Keep", selection: $keepCount) {
+                    ForEach([2, 3, 4, 6, 8], id: \.self) { Text("keep \($0)").tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 100)
+                Button(app.discoveryPhase == .idle ? "Find" : "Search Again") { runTopicSearch() }
+                    .disabled(topicText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || app.discoveryUnavailableReason != nil
+                              || isDiscoveryWorking)
+            }
+
+            discoveryProgress
+
+            if let plan = app.discoveryPlan {
+                discoveryResults(plan)
+            }
+        }
+        .padding(Design.spacingSmall)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: Design.rowCornerRadius))
+        .padding(.horizontal, Design.spacingMedium)
+        .padding(.bottom, Design.spacingSmall)
+    }
+
+    private var isDiscoveryWorking: Bool {
+        switch app.discoveryPhase {
+        case .searching, .askingAI, .fetching: return true
+        case .idle, .planning, .done: return false
+        }
+    }
+
+    @ViewBuilder
+    private var discoveryProgress: some View {
+        switch app.discoveryPhase {
+        case .idle:
+            EmptyView()
+        case .fetching(let index, let total, let title):
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: Design.spacingSmall) {
+                    ProgressView().controlSize(.small)
+                    Text("Downloading \(index) of \(total)").font(.system(size: 11, weight: .medium))
+                    Spacer()
+                    Button("Cancel") { app.cancelDiscovery() }.controlSize(.small)
+                }
+                Text(title).font(Design.caption).foregroundStyle(.secondary).lineLimit(1)
+                ProgressView(value: Double(index - 1), total: Double(max(1, total)))
+                    .progressViewStyle(.linear)
+            }
+        default:
+            HStack(spacing: Design.spacingSmall) {
+                ProgressView().controlSize(.small)
+                Text(app.discoveryPhase.label).font(.system(size: 11))
+                Spacer()
+                Button("Cancel") { app.cancelDiscovery() }.controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func discoveryResults(_ plan: SourceDiscoveryService.Plan) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let notice = plan.aiNotice {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.orange)
+                    Text(notice)
+                        .font(Design.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else if plan.keptCount > 0 {
+                Text("The model chose \(plan.keptCount) of \(plan.searchedCount) results.")
+                    .font(.system(size: 11, weight: .medium))
+            }
+
+            if plan.queryWasRewritten {
+                Text("Searched for “\(plan.query)”")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            if plan.selections.isEmpty {
+                Text("Nothing was selected. Try different wording.")
+                    .font(Design.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(plan.selections, id: \.result.id) { selection in
+                            discoveryRow(selection)
+                            Divider()
+                        }
+                    }
+                }
+                .frame(maxHeight: 200)
+                .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .textBackgroundColor)))
+
+                HStack {
+                    Button("Select All") {
+                        approved = Set(plan.selections.map(\.result.url))
+                    }
+                    .controlSize(.small)
+                    Button("Select None") { approved = [] }
+                        .controlSize(.small)
+                    Spacer()
+                    Button("Add \(approved.count) Source\(approved.count == 1 ? "" : "s")") {
+                        addApproved(plan)
+                    }
+                    .controlSize(.small)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(approved.isEmpty || isDiscoveryWorking)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func discoveryRow(_ selection: SourceDiscoveryService.Selection) -> some View {
+        let isOn = approved.contains(selection.result.url)
+        HStack(alignment: .top, spacing: Design.spacingSmall) {
+            Toggle("", isOn: Binding(
+                get: { isOn },
+                set: { value in
+                    if value { approved.insert(selection.result.url) }
+                    else { approved.remove(selection.result.url) }
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.checkbox)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(selection.result.title.isEmpty ? selection.result.url : selection.result.title)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(2)
+                Text(selection.result.url)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let reason = selection.reason {
+                    HStack(alignment: .top, spacing: 4) {
+                        Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(.tint)
+                        Text(reason)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isOn { approved.remove(selection.result.url) }
+            else { approved.insert(selection.result.url) }
+        }
+    }
+
+    private func runTopicSearch() {
+        let trimmed = topicText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        approved = []
+        app.planSources(topic: trimmed, keep: keepCount)
+    }
+
+    private func addApproved(_ plan: SourceDiscoveryService.Plan) {
+        let chosen = plan.selections.filter { approved.contains($0.result.url) }.map(\.result)
+        guard !chosen.isEmpty else { return }
+        app.addPlannedSources(chosen)
     }
 
     private var sourceSelection: Binding<RecordID?> {
