@@ -1,138 +1,268 @@
+<img src="docs/icon.png" width="96" align="right" alt="SourceDesk icon">
+
 # SourceDesk
 
-| Download source | Download app | Build |
-|---|---|---|
-| [![Download ZIP](https://img.shields.io/badge/⬇️_Download_ZIP-black?style=for-the-badge&logo=github)](https://github.com/Sumi1124/-/archive/refs/heads/main.zip) | [![Latest release](https://img.shields.io/badge/⬇️_Get_the_app-blue?style=for-the-badge&logo=apple)](https://github.com/Sumi1124/-/releases/latest) | [![Build status](https://github.com/Sumi1124/-/actions/workflows/build.yml/badge.svg)](https://github.com/Sumi1124/-/actions/workflows/build.yml) |
-
 A local-first AI research notebook for macOS. Collect sources — websites, PDFs,
-text, Markdown, DOCX — store everything on your Mac, and ask questions grounded
-in your research with citations.
+documents, pasted text — keep everything on your Mac, and ask questions that are
+answered from your material **with citations you can inspect**.
 
-> **Status:** Code complete and organized; not yet built/verified in Xcode.
-> Building requires Xcode 15+ (SwiftData macros do not ship with the Command
-> Line Tools). See [Building](#building).
+SourceDesk is an independent project. It is inspired by the general idea of
+document-grounded AI assistants, but contains no code, assets, prompts or branding
+from Google NotebookLM or any other product.
 
-## Highlights
+![SourceDesk](docs/screenshots/01-research.png)
 
-- **Local-first.** All notebooks, sources, chunks, chat history, and notes live
-  in a SwiftData store on your Mac. Nothing is uploaded by SourceDesk itself.
-- **RAG-grounded chat.** Answers are generated from the sources you've collected,
-  with `[Source N]` citation markers and a citation inspector.
-- **Flexible AI providers.** Ollama (fully local, detected — never auto-downloaded),
-  OpenAI, and Anthropic Claude. API keys are stored in the macOS Keychain.
-- **Web search.** Optional Brave or DuckDuckGo results can be mixed into chat
-  (`Notebook + Web` or `Web Only` modes), clearly separated from your sources.
-- **Offline-first.** A network monitor tracks connectivity; cloud features are
-  blocked with helpful messages while offline or when **Local-Only Mode** is on.
-- **Study tools.** Ten generators — summary, key points, timeline, FAQ, quiz,
-  flashcards, study guide, outline, quotations, and source comparison — with
-  one-click "Save to Notes".
-- **Unlimited sources.** Add websites, PDFs, TXT, Markdown, HTML, DOCX, and
-  pasted text in any quantity.
-- **Import / export.** Notebooks export to a documented `.zip` archive and can
-  be imported back on the same or another Mac.
+---
 
-## Download the app
+## What it does
 
-Ready-to-run builds are attached to every tagged **Release**, and a fresh
-unsigned build is produced on demand via **Actions → Build SourceDesk → Run
-workflow**. Grab the `.dmg`, mount it, and drag `SourceDesk` into
-/Applications.
+- **Unlimited sources.** Add as many websites, PDFs, DOCX, RTF, EPUB, Markdown,
+  HTML or pasted-text sources as your disk allows. There are no product-imposed
+  caps on source count, notebooks or total size — only the limits of your machine,
+  your storage, and the providers you choose to use.
+- **Answers grounded in your sources, with citations.** Every answer cites the
+  passages it used. Clicking a citation opens the source, the page, the section and
+  the excerpt behind it. Citation markers that do not resolve to a retrieved passage
+  are removed from the answer rather than shown.
+- **Local-first, and honest about it.** Notebooks, sources, extracted text, chunks,
+  vectors, conversations, notes and settings all live in one folder on your Mac.
+  Nothing is uploaded by SourceDesk itself. Choose a local model and nothing leaves
+  the machine at all.
+- **Local or cloud models.** Ollama on your Mac, OpenAI, or Anthropic Claude.
+  Switchable per conversation, with an explicit per-notebook confirmation before any
+  source text goes to a cloud provider.
+- **Optional web search.** Notebook only, notebook + web, or web only — with web
+  results always labelled separately from your sources.
+- **Offline mode.** Read sources, search locally, chat with a local model and
+  generate notes with no network connection.
+- **Study tools.** Eleven generators: summary, key points, timeline, FAQ, quiz,
+  flashcards, study guide, outline, quotations, source comparison and briefing. Quiz
+  and flashcard output is structured, so the app can run them interactively.
+- **Open export format.** Notebooks export to a plain `.nbk` zip you can read with
+  `unzip` and any text editor.
 
-> The app is unsigned (open-source, no paid Developer ID), so macOS asks the
-> first time: **right-click `SourceDesk` → Open** instead of double-clicking.
-> Everything else works like a normal installed Mac app.
+## Screenshots
+
+| | |
+|---|---|
+| ![Sources](docs/screenshots/02-sources.png) **Source management** — status, size, passages | ![Source inspector](docs/screenshots/03-source-inspector.png) **Inspector** — provenance, extracted text, passages |
+| ![Study tools](docs/screenshots/04-study-tools.png) **Study tools** — eleven generators | ![Notes](docs/screenshots/05-notes-flashcards.png) **Notes** — flashcards and quizzes you can run |
+| ![Search](docs/screenshots/06-web-search.png) **Web search** — results you can add as sources | ![Command palette](docs/screenshots/08-command-palette.png) **Command palette** — ⌘K across everything |
+| ![Providers](docs/screenshots/07-settings-providers.png) **Providers** — local first, cloud optional | ![Privacy](docs/screenshots/07c-settings-privacy.png) **Privacy** — what leaves the Mac, stated plainly |
+
+These are rendered from the app's own views by `SourceDesk --render-screenshots`;
+regenerate them with `scripts/screenshots.sh`. They cannot drift from the interface,
+because they *are* the interface.
 
 ## Requirements
 
 - macOS 14 Sonoma or later
-- Xcode 15 or later (SwiftData build support) — the latest Xcode is recommended
-- [Ollama](https://ollama.com) for local models (optional)
-- API keys for OpenAI / Anthropic / Brave (optional)
+- **Xcode 15 or later to build** (the SwiftData/Observation macro plugins ship with
+  Xcode, not the Command Line Tools — see [Building](#building))
+- Optional: [Ollama](https://ollama.com) for local models
+- Optional: API keys for OpenAI, Anthropic, and/or a search provider
+
+## Install
+
+```bash
+scripts/build_app.sh release     # assembles build/SourceDesk.app
+open build/SourceDesk.app
+```
+
+Prebuilt binaries are attached to every run of **Actions → Build and test** on GitHub
+(see `.github/workflows/build.yml`). Move `SourceDesk.app` to `/Applications`, then
+**right-click → Open** the first time: the app is unsigned, so macOS asks once.
 
 ## Building
 
-Clone or open the project, then:
-
-1. `open SourceDesk.xcodeproj`
-2. Select the **SourceDesk** scheme (⌘⇧<)
-3. Choose your team under *Signing & Capabilities* and (optionally) enable the
-   **App Group** entitlement `group.com.sourcedesk.app` for shared storage.
-   Without the entitlement the app falls back to a per-app store automatically.
-4. Run (⌘R).
-
-The result is a normal macOS app: `SourceDesk.app`, built from the product
-folder. You can copy it into `/Applications`; open it from Finder, launch it
-from Spotlight, or pin it to the Dock. (For distribution to other Macs, use
-Archive → Distribute App, or wrap the `.app` in a `.dmg`.)
-
-The Xcode project is generated by [`scripts/generate_project.py`](scripts/generate_project.py);
-re-run it if you add or remove source files.
-
-> Note: SwiftData `@Model` macros require Xcode's build system. A plain
-> `swift build` from the terminal will fail with "external macro implementation
-> not found" — this is expected and only affects Command Line Tool installs.
-
-## Getting Started
-
-1. **Create a notebook** (⌘N).
-2. **Add sources** (⌘U) — paste a URL, choose files, or paste text.
-3. **Ask questions** in the Research tab. Pick a search mode in the header.
-4. **Inspect answers** — click a citation pill to see the source excerpt.
-5. **Generate study material** in the Study Tools tab and save it to Notes.
-6. **Move fast** — press **⌘K** for a command palette that jumps to any
-   notebook, source, or tab.
-
-## Configuration
-
-- **AI Providers** — choose a local Ollama model (only models you've already
-  installed are listed) or enter OpenAI/Anthropic API keys.
-- **Privacy** — enable *Local-Only Mode* to restrict everything to local
-  processing, and *Confirm before sending content to cloud AI* for a warning
-  before your questions (and retrieved source excerpts) leave your Mac.
-- **Search** — DuckDuckGo works with no key; Brave offers fuller results.
-- **Advanced** — chunk size, overlap, retrieval count, and semantic embeddings.
-
-## Architecture
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the layout: models, the AI
-provider abstraction, ingestion pipeline, RAG flow, view models, and views.
-
-Layout in brief:
-
-```
-SourceDesk/
-├── App/            entry point, shared app state (AppState)
-├── Models/         SwiftData models + SwiftData-free types (Types.swift)
-├── Services/
-│   ├── AI/         provider protocol, Ollama/OpenAI/Anthropic, AIManager
-│   ├── Ingestion/  web download, text/document extraction, ingestion service
-│   ├── RAG/        chunking, embeddings, vector store, pipeline
-│   ├── Search/     DuckDuckGo + Brave providers, SearchManager
-│   ├── Storage/    Keychain, notebook exporter/importer
-│   └── StudyToolsService.swift
-├── Utilities/      token estimate, chunking, text cleaning (pure Swift)
-├── ViewModels/     observable view models
-└── Views/          SwiftUI three-column interface
+```bash
+git clone https://github.com/<you>/sourcedesk.git
+cd sourcedesk
+swift build -c release
+open .build/release/SourceDesk
 ```
 
-## Data & Privacy
+`scripts/build_app.sh` wraps the built binary in a proper `.app` bundle (Info.plist,
+icon, ad-hoc signature) so it behaves like a normal Mac application. The icon is
+generated by `scripts/generate_icon.py` using only the Python standard library.
 
-- Notebook data: `~/Library/Application Support/SourceDesk/`
-- API keys: macOS Keychain (service `sourcedesk`)
-- Your sources and notes stay local. Cloud AI and web search are opt-in and only
-  send what's needed for the task you trigger, always with a clear indicator in
-  the UI (toolbar online/offline pill, provider menu, privacy settings).
+There are **no third-party dependencies**. SourceDesk uses SwiftUI, AppKit, PDFKit
+and Network, plus SQLite and zlib, which ship with macOS. Vector search, keyword
+search (SQLite FTS5), HTML extraction, PDF/DOCX/EPUB reading, zip archives and
+SHA-256 are all implemented in the repository, which is why the app builds offline
+and has no supply chain to audit.
 
-## Testing
+### Testing
 
-Unit tests in `SourceDeskTests/` cover token estimation, chunking, vector math,
-citation parsing, robots handling, and more. Run them with ⌘U in Xcode.
+```bash
+swift run SourceDeskHarness            # all suites: ~152 tests, ~990 assertions
+swift run SourceDeskHarness -f "6 ·"   # one suite
+SOURCEDESK_LIVE_WEB=1 scripts/test.sh  # also exercise the public internet
+```
+
+`scripts/test.sh` is the CI gate and exits non-zero on failure. See
+[Testing](#testing-approach) for why the tests live in an executable rather than
+`swift test`.
+
+## First run
+
+1. **Create a notebook** (⇧⌘N) and add sources: ⇧⌘U for a website, ⇧⌘O for files,
+   or drop files onto the window. Folders are scanned recursively.
+2. **Ask a question** in the Research tab. With no model configured, SourceDesk
+   says so and tells you what to do rather than failing silently.
+3. **Pick a model** from the toolbar picker. If Ollama is installed, your models
+   appear automatically; SourceDesk never downloads one for you.
+
+### Setting up a local model
+
+```bash
+brew install ollama          # or download from ollama.com
+ollama serve                 # if it is not already running
+ollama pull llama3.2         # ~2 GB, fast and capable for note-sized questions
+ollama pull nomic-embed-text # optional: better semantic search
+```
+
+Then choose **Ollama** in the toolbar and (optionally) set embeddings to
+*Local model* in Settings → Retrieval.
+
+### Cloud providers
+
+Settings → AI Providers stores keys in the **macOS Keychain** — never in the
+notebook, a settings file, a log or an export. Two things worth being clear about:
+
+- A **ChatGPT Plus or Claude Pro subscription is not an API key**. SourceDesk uses
+  the official APIs, which are billed separately by those vendors. The app says this
+  in the UI rather than implying otherwise.
+- Cloud use requires a **per-notebook confirmation** before any source text leaves
+  the Mac, and **Local-Only Mode** disables cloud providers entirely.
+
+## How answers stay grounded
+
+```
+Sources → download/extract → clean → chunk → embed → store (SQLite + FTS5)
+                                                              │
+Question ──► hybrid retrieval (semantic + keyword, fused) ─────┘
+             └─► rerank ─► context assembly ─► model ─► citation validation ─► answer
+```
+
+1. **Retrieval** runs semantic vector search and SQLite FTS5 keyword search in
+   parallel and merges the rankings with reciprocal-rank fusion, so losing either
+   method degrades recall instead of breaking search.
+2. **Reranking** re-scores candidates on term coverage, phrase proximity and heading
+   agreement — in milliseconds, with no model. A model-based reranker is available
+   and falls back to the lexical one if the model is unavailable.
+3. **Context assembly** assigns `[Source N]` / `[Web N]` markers. Markers are
+   assigned in exactly one place, so a citation can never refer to something that was
+   not in the prompt.
+4. **Validation** re-reads the answer, resolves every marker against the material
+   that was actually supplied, and strips any marker that does not resolve. The
+   retrieval trace (chunks, scores, timings) is stored with the message, so the
+   "show your work" panel works even after a restart or an import.
+
+## Privacy
+
+| Scope | What leaves this Mac |
+|---|---|
+| Local model | Nothing. Model, embeddings and index all run on the Mac. |
+| Cloud model | The retrieved passages and your question, sent to your chosen provider. |
+| Web search | Your search query, sent to your chosen search provider. |
+| Everything else | Nothing. No telemetry, no analytics, no accounts, no update pings. |
+
+Settings → Privacy shows this table live, including which notebooks you have
+approved for cloud use, with a revoke button for each. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#privacy-model) for the details.
+
+## Import and export
+
+`⇧⌘E` exports the current notebook to a `.nbk` archive — a plain zip:
+
+```
+My Notebook/
+├── notebook.json        notebook, sources, sessions, notes, chunks
+├── sources/<id>/        content.txt, original files
+├── chats/*.md           readable transcripts
+├── notes/*.md           readable notes
+└── embeddings/*.jsonl   optional vectors, so an import need not re-embed
+```
+
+`⇧⌘I` imports one, always as a **new** notebook, so importing twice can never
+overwrite existing work. API keys and application settings are never included.
+
+## Keyboard shortcuts
+
+| | |
+|---|---|
+| ⌘N | New notebook |
+| ⇧⌘N | New notebook |
+| ⌘K | Command palette |
+| ⌘1 … ⌘5 | Research · Sources · Notes · Study Tools · Search |
+| ⇧⌘U | Add website |
+| ⇧⌘O | Add files |
+| ⇧⌘E / ⇧⌘I | Export / import notebook |
+| ⇧⌘R | Refresh model lists |
+| ⌘↩ | Ask |
+| ⌘. | Stop generating |
+| ⌘F | Filter notebooks (sidebar) |
+
+## Testing approach
+
+Two things about this project's testing are unusual, and both are deliberate.
+
+**The tests are an ordinary executable, not `swift test`.** Apple's Command Line
+Tools ship without the XCTest and swift-testing bundles, and without the macro
+plugins SwiftData needs. The suites therefore live in `Tests/Harness` and run via
+`swift run SourceDeskHarness`, with a small assertion framework in
+`Tests/Harness/TestKit.swift`. This keeps the whole project buildable and *testable*
+with only the Command Line Tools, and the harness reports the same pass/fail detail
+`swift test` would.
+
+**Provider behaviour is tested against a real HTTP server.** `LocalHTTPServer` in the
+harness is a small socket server; the Ollama, OpenAI and Anthropic providers are
+exercised with real `URLSession` requests, real streaming, real status codes and real
+error bodies. That is what catches the bugs that matter — a mis-parsed SSE line, a
+missing header, a multi-byte character split across a stream chunk — which a mocked
+transport would not.
+
+The suites cover persistence and restart, HTML extraction, chunking, embeddings,
+hybrid retrieval, every provider's request/response shape and failure modes, web
+search, study-tool parsing, export/import round trips, settings migration, offline
+behaviour, and full product flows end to end (ingest → retrieve → answer → cite →
+export → import → answer again).
+
+## Project layout
+
+```
+Sources/SourceDeskCore/     the engine: no UI, no AppKit
+├── Ingestion/              HTML/PDF/DOCX/EPUB/RTF readers, web downloader, robots.txt
+├── RAG/                    chunking, embeddings, hybrid retrieval, context assembly
+├── AI/                     provider protocol, Ollama, OpenAI, Anthropic, prompts, engine
+├── Search/                 search providers, reachability
+├── Study/                  study-tool generators and output parsers
+├── Export/                 .nbk archive format
+└── Settings/               settings model, diagnostics log
+
+Sources/SourceDesk/         the SwiftUI app
+├── App/                    entry point, AppState, view models' host
+├── ViewModels/             chat and study-tool view models
+└── Views/                  sidebar, research, sources, inspector, notes, settings
+
+Tests/Harness/              verification suites (see above)
+scripts/                    test, screenshot and release helpers
+docs/                       architecture and format documentation
+```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and
+[docs/NOTEBOOK_FORMAT.md](docs/NOTEBOOK_FORMAT.md) for the export format.
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Please run `scripts/test.sh` before opening a PR.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+SourceDesk is not affiliated with, endorsed by, or derived from Google NotebookLM,
+OpenAI, Anthropic, Brave or Tavily. Provider and product names are trademarks of
+their respective owners and are used only to describe interoperability.

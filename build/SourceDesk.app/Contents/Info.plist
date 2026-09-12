@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>            <string>SourceDesk</string>
+    <key>CFBundleDisplayName</key>     <string>SourceDesk</string>
+    <key>CFBundleExecutable</key>      <string>SourceDesk</string>
+    <key>CFBundleIdentifier</key>      <string>com.sourcedesk.app</string>
+    <key>CFBundleIconFile</key>        <string>AppIcon</string>
+    <key>CFBundlePackageType</key>     <string>APPL</string>
+    <key>CFBundleShortVersionString</key> <string>1.0.0</string>
+    <key>CFBundleVersion</key>         <string>1</string>
+    <key>LSMinimumSystemVersion</key>  <string>14.0</string>
+    <key>NSHighResolutionCapable</key> <true/>
+    <key>NSSupportsAutomaticTermination</key> <false/>
+    <key>LSApplicationCategoryType</key> <string>public.app-category.productivity</string>
+    <key>NSHumanReadableCopyright</key> <string>MIT licensed. SourceDesk is an independent project and is not affiliated with Google NotebookLM.</string>
+    <!-- SourceDesk downloads pages the user explicitly adds, and talks to the AI
+         providers the user configures. It needs no special entitlements, no camera,
+         microphone, contacts or location access, and requests none. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- Users may point a provider at a plain-HTTP localhost server. -->
+        <key>NSAllowsLocalNetworking</key><true/>
+    </dict>
+</dict>
+</plist>

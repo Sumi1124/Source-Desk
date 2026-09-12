@@ -1,89 +1,62 @@
-name: Build SourceDesk
+name: Build and test
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
+# A second push to the same branch cancels the first build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build unsigned .app + .dmg
-    runs-on: macos-15
+  test:
+    name: Verify (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-14 is the oldest runner that can build for macOS 14, which is the
+        # deployment target. Keep both so a regression on the minimum supported
+        # macOS is caught here rather than by a user.
+        runner: [macos-14, macos-15]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Pre-build diagnostics
+      - name: Show toolchain
         run: |
-          echo "=== Xcode version ==="
+          swift --version
           xcodebuild -version
-          echo "=== SDK ==="
-          xcrun --show-sdk-path --sdk macosx
-          echo "=== Project targets ==="
-          xcodebuild -project SourceDesk.xcodeproj -list
-          echo "=== Scheme ==="
-          xcodebuild -project SourceDesk.xcodeproj -scheme SourceDesk -showBuildSettings -configuration Release | grep -E '(PRODUCT_NAME|TARGET_NAME|CODE_SIGN|SWIFT_VERSION|MACOSX_DEPLOYMENT)' | head -20
+          sw_vers
 
-      - name: Build (Release, universal, unsigned)
-        run: |
-          set -euo pipefail
-          mkdir -p build
-          xcodebuild \
-            -project SourceDesk.xcodeproj \
-            -target SourceDesk \
-            -configuration Release \
-            -derivedDataPath build \
-            -destination 'platform=macOS' \
-            ARCHS="arm64 x86_64" \
-            ONLY_ACTIVE_ARCH=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            INFOPLIST_KEY_CFBundleIconName=AppIcon \
-            INFOPLIST_KEY_LSMinimumSystemVersion=14.0 \
-            INFOPLIST_KEY_NSPrincipalClass=NSApplication \
-            build 2>&1 | tee build/xcodebuild.log
-          echo "=== BUILD EXIT CODE: \${PIPESTATUS[0]} ==="
-          cat build/xcodebuild.log
-          test -d "build/Build/Products/Release/SourceDesk.app"
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-${{ matrix.runner }}-spm-${{ hashFiles('Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.runner }}-spm-
 
-      - name: Upload build log
-        if: failure()
+      - name: Build (debug)
+        run: swift build
+
+      # The harness is a normal executable rather than `swift test`, because
+      # SwiftPM's XCTest and swift-testing bundles are not available to this
+      # project's toolchain constraints. It exits non-zero on any failure.
+      - name: Run verification suites
+        run: ./.build/debug/SourceDeskHarness
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Upload the app binary (release build)
+        if: matrix.runner == 'macos-14'
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: build/xcodebuild.log
-          if-no-files-found: warn
-
-      - name: Package DMG
-        run: |
-          set -euxo pipefail
-          out="build/dmgroot"
-          mkdir -p "$out"
-          cp -R "build/Build/Products/Release/SourceDesk.app" "$out/"
-          ln -s /Applications "$out/Applications"
-          hdiutil create \
-            -volname "SourceDesk" \
-            -srcfolder "$out" \
-            -ov \
-            -format UDZO \
-            "SourceDesk.dmg"
-
-      - name: Verify DMG
-        run: hdiutil verify SourceDesk.dmg
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SourceDesk-dmg
-          path: SourceDesk.dmg
+          name: SourceDesk-release-${{ github.sha }}
+          path: .build/release/SourceDesk
           if-no-files-found: error
-
-      - name: Attach to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" SourceDesk.dmg \
-            --title "SourceDesk $GITHUB_REF_NAME" \
-            --notes "Universal macOS app (Apple Silicon + Intel). Unsigned — on first open, right-click the app and choose **Open**."
+          retention-days: 30

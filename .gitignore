@@ -1,28 +1,42 @@
-# Swift / Xcode
-.DS_Store
-/build/
-/DerivedData/
-*.xcuserstate
-xcuserdata/
-*.xccheckout
-*.moved-aside
-*.swp
-*.swo
-*.tmp
-
-# Swift Package Manager
+# Build
 .build/
-.swiftpm/
+*.o
+*.dSYM/
 
-# Local builds
-SourceDesk.app/
-*.dSYM
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Icon\r
 
-# Secrets — never commit API keys
+# Xcode / SwiftPM
+*.xcodeproj/
+*.xcworkspace/
+!*.xcodeproj/project.xcworkspace/
+DerivedData/
+Package.resolved
+
+# Never commit credentials or user data
 .env
-.env.local
+.env.*
+!.env.example
+Secrets.plist
+*.key
+*.pem
+credentials.json
 
-# IDE
-.idea/
+# Local library snapshots and exports (a user's research is not source code)
+*.nbk
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Rendered documentation is committed deliberately; scratch renders are not
+/docs/screenshots/rendered/
+
+# Editor
 .vscode/
-*.xcworkspace/xcuserdata/
+.idea/
+*.swp
+*~

@@ -1,172 +1,237 @@
 #!/usr/bin/env python3
-"""Generate SourceDesk app icon (1024x1024 PNG) without external deps."""
-import struct, zlib, math, os
+"""Generate the SourceDesk app icon.
+
+    python3 scripts/generate_icon.py
+
+Writes:
+  docs/icon.png                     1024x1024, for the README
+  Assets/AppIcon.icns               the macOS icon
+  Assets/AppIcon.iconset/*.png      the sizes iTunes/`iconutil` expect
+
+The design is deliberately restrained, matching the application's own visual
+language: a single soft slate field, a document, and three citation marks. No
+gradient mesh, no glow, nothing that needs a caption.
+
+Pure standard library — no Pillow, no ImageMagick — so it runs anywhere Python 3
+does, including a fresh checkout on a Mac that has never installed anything.
+"""
+
+import math
+import os
+import struct
+import subprocess
+import sys
+import zlib
 
 SIZE = 1024
-C = 0.28  # corner radius fraction for rounded square
+SUPERSAMPLE = 2
+
+# Palette (kept in step with Sources/SourceDesk/Views/Design.swift).
+FIELD_TOP = (0x1F, 0x2A, 0x3A)
+FIELD_BOTTOM = (0x14, 0x1B, 0x26)
+PAPER = (0xFA, 0xFA, 0xF8)
+PAPER_EDGE = (0xDF, 0xDF, 0xDA)
+INK = (0x24, 0x2B, 0x36)
+INK_SOFT = (0x6B, 0x74, 0x82)
+ACCENT = (0x2F, 0x6F, 0xE0)      # the citation blue used in the app
+ACCENT_2 = (0x2E, 0x8B, 0x74)    # the second citation tint
+MARK_DIM = (0xC7, 0xCE, 0xD8)
+
 
 def lerp(a, b, t):
     return a + (b - a) * t
 
+
+def mix(c1, c2, t):
+    return tuple(lerp(c1[i], c2[i], t) for i in range(3))
+
+
 def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
-def rounded_rect(x0, y0, x1, y1, rad):
-    # returns signed-distance-like coverage in 0..1
-    cx = clamp(x0, x0, x1)
-    return None
 
-def rr_coverage(px, py, x0, y0, x1, y1, rad):
-    cx = clamp(px, x0 + rad, x1 - rad)
-    cy = clamp(py, y0 + rad, y1 - rad)
+def inside_rounded_rect(px, py, x0, y0, x1, y1, radius):
+    """Point-in-rounded-rectangle test (exact, not an approximation)."""
+    cx = clamp(px, x0 + radius, x1 - radius)
+    cy = clamp(py, y0 + radius, y1 - radius)
     dx = px - cx
     dy = py - cy
-    d2 = dx * dx + dy * dy
-    if d2 <= rad * rad:
-        return 1.0
-    # outside: distance to the rounded rect
-    qx = clamp(px, x0, x1)
-    qy = clamp(py, y0, y1)
-    return 0.0
-
-def inside_rr(px, py, x0, y0, x1, y1, rad):
-    cx = clamp(px, x0 + rad, x1 - rad)
-    cy = clamp(py, y0 + rad, y1 - rad)
-    dx = px - cx
-    dy = py - cy
-    if abs(dx) <= rad and abs(dy) <= rad:
-        return dx * dx + dy * dy <= rad * rad
-    if abs(dx) <= rad and py >= y0 and py <= y1:
+    if dx == 0 and dy == 0:
         return True
-    if abs(dy) <= rad and px >= x0 and px <= x1:
-        return True
-    qx = clamp(px, x0, x1)
-    qy = clamp(py, y0, y1)
-    return (px - qx) ** 2 + (py - qy) ** 2 <= rad * rad
+    # Only the corner regions can be outside.
+    if x0 <= px <= x1 and y0 <= py <= y1:
+        if radius <= 0:
+            return True
+        if x0 + radius <= px <= x1 - radius or y0 + radius <= py <= y1 - radius:
+            return True
+    return dx * dx + dy * dy <= radius * radius
 
-def shade_inside(px, py, x0, y0, x1, y1, rad):
-    return inside_rr(px, py, x0, y0, x1, y1, rad)
 
-def write_png(path, w, h, pixels):  # pixels: list of (r,g,b,a) 0..255
+def write_png(path, width, height, pixels):
+    """Minimal PNG writer: 8-bit RGBA, no interlacing."""
     def chunk(tag, data):
-        c = struct.pack(">I", len(data)) + tag + data
-        c += struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
-        return c
+        payload = tag + data
+        return (struct.pack(">I", len(data)) + payload
+                + struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF))
+
     raw = bytearray()
-    for y in range(h):
-        raw.append(0)
-        for x in range(w):
-            r, g, b, a = pixels[y * w + x]
+    for y in range(height):
+        raw.append(0)  # filter: none
+        row = pixels[y * width:(y + 1) * width]
+        for r, g, b, a in row:
             raw += bytes((r, g, b, a))
-    ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
     png = b"\x89PNG\r\n\x1a\n"
-    png += chunk(b"IHDR", ihdr)
+    png += chunk(b"IHDR", header)
     png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
     png += chunk(b"IEND", b"")
-    with open(path, "wb") as f:
-        f.write(png)
+    with open(path, "wb") as handle:
+        handle.write(png)
 
-def draw(supersample=2):
-    W = SIZE * supersample
-    img = [None] * (W * W)
-    R = C * W
 
-    for y in range(W):
-        for x in range(W):
-            t = y / W
-            # background gradient deep blue -> dark
-            bg_r = lerp(0x1E, 0x10, t)
-            bg_g = lerp(0x3A, 0x16, t)
-            bg_b = lerp(0x8A, 0x3A, t)
+def draw():
+    """Render at SUPERSAMPLE times the size, then box-downsample for clean edges."""
+    scale = SUPERSAMPLE
+    dimension = SIZE * scale
+    radius = dimension * 0.225               # macOS-style squircle-ish corner
+    margin = dimension * 0.0
 
-            r, g, b = bg_r, bg_g, bg_b
+    # Geometry, all as fractions of the canvas.
+    paper_x0, paper_y0 = dimension * 0.235, dimension * 0.180
+    paper_x1, paper_y1 = dimension * 0.765, dimension * 0.830
+    paper_radius = dimension * 0.045
 
-            # mask to rounded square (macOS icons are full-bleed; system clips)
-            if x == 0 or y == 0 or x == W - 1 or y == W - 1:
-                pass
+    # Three citation chips inside the paper's right margin, so they read as inline
+    # citations rather than bleeding off the page.
+    marks = [
+        (0.500, ACCENT),
+        (0.640, ACCENT_2),
+        (0.780, MARK_DIM),
+    ]
 
-            # ---- document/paper card ----
-            rx0, ry0, rx1, ry1 = W * 0.20, W * 0.16, W * 0.80, W * 0.84
-            in_card = inside_rr(x, y, rx0, ry0, rx1, ry1, W * 0.05)
-            if in_card:
-                # subtle vertical gradient on the paper
-                ct = (y - ry0) / (ry1 - ry0)
-                pr = lerp(0xF8, 0xE2, ct)
-                pg = lerp(0xFA, 0xE8, ct)
-                pb = lerp(0xFF, 0xF5, ct)
-                r, g, b = pr, pg, pb
+    # Text lines inside the paper: (y fraction, width fraction).
+    # Text lines. Widths are capped so the citation chips keep clear space.
+    lines = [
+        (0.250, 0.60), (0.325, 0.62), (0.400, 0.62),
+        (0.475, 0.42), (0.585, 0.62), (0.660, 0.50),
+        (0.735, 0.34),
+    ]
 
-                # header bar accent
-                if y > ry0 + W * 0.06 and y < ry0 + W * 0.135:
-                    if x > rx0 + W * 0.10 and x < rx0 + W * 0.42:
-                        r, g, b = 0x1D, 0x4E, 0xD8
+    pixels = [None] * (dimension * dimension)
+    line_half = dimension * 0.017
 
-                # text lines
-                lx0, lx1 = rx0 + W * 0.10, rx1 - W * 0.10
-                for i, (ly, lw) in enumerate([
-                    (0.215, 1.0), (0.30, 0.85), (0.36, 0.85),
-                    (0.46, 1.0), (0.545, 1.0), (0.615, 0.7), (0.685, 0.85),
-                    (0.775, 0.55),
-                ]):
-                    yy = ry0 + ly * (ry1 - ry0)
-                    lxo = lx0
-                    lx2 = lx0 + (lx1 - lx0) * lw
-                    if abs(y - yy) < W * 0.021:
-                        if x > lxo and x < lx2:
-                            r, g, b = lerp(0xb, 0x2c, 0), 0x2c, 0x5e  # dark slate blue lines
-            else:
-                # subtle border glow outside card
-                pass
+    for y in range(dimension):
+        vertical = y / dimension
+        field = mix(FIELD_TOP, FIELD_BOTTOM, vertical)
 
-            # book ribbon
-            rx0r, ry0r = W * 0.765, W * 0.16
-            rx1r, ry1r = W * 0.825, W * 0.16 + W * 0.30
-            if inside_rr(x, y, rx0r, ry0r, rx1r, ry1r, W * 0.02):
-                r, g, b = 0xE6, 0x4A, 0x3B
+        for x in range(dimension):
+            r, g, b = field
+            # macOS masks icons to a rounded square; drawing it here means the PNG
+            # looks correct in the README and in any non-macOS viewer too.
+            if not inside_rounded_rect(x, y, margin, margin,
+                                       dimension - margin, dimension - margin, radius):
+                pixels[y * dimension + x] = (0, 0, 0, 0)
+                continue
+            alpha = 255
 
-            # radial highlight top-left
-            hx, hy = W * 0.30, W * 0.22
-            hr = W * 0.55
-            d = ((x - hx) ** 2 + (y - hy) ** 2) ** 0.5
-            if d < hr:
-                halo = (1 - d / hr) * 0.12
-                r = int(r + (255 - r) * halo)
-                g = int(g + (255 - g) * halo)
-                b = int(b + (255 - b) * halo)
+            # Paper: a very slight vertical lightening keeps it from looking flat
+            # without being a decorative gradient.
+            if inside_rounded_rect(x, y, paper_x0, paper_y0, paper_x1, paper_y1, paper_radius):
+                paper_t = (y - paper_y0) / (paper_y1 - paper_y0)
+                r, g, b = mix(PAPER, PAPER_EDGE, paper_t * 0.35)
 
-            img[y * W + x] = (int(clamp(r, 0, 255)), int(clamp(g, 0, 255)), int(clamp(b, 0, 255)), 255)
+                # Accent rule near the top, echoing the app's section headers.
+                if paper_y0 + dimension * 0.075 <= y <= paper_y0 + dimension * 0.095:
+                    if paper_x0 + dimension * 0.075 <= x <= paper_x0 + dimension * 0.255:
+                        r, g, b = ACCENT
 
-    # downsample (box average) to SIZE
+                # Text lines.
+                for line_y, line_w in lines:
+                    yy = paper_y0 + line_y * (paper_y1 - paper_y0)
+                    if abs(y - yy) <= line_half:
+                        lx0 = paper_x0 + dimension * 0.075
+                        lx1 = lx0 + (paper_x1 - paper_x0 - dimension * 0.150) * line_w
+                        if lx0 <= x <= lx1:
+                            r, g, b = INK_SOFT
+                            break
+
+                # Citation chips sit inside the paper's right margin.
+                for mark_y, colour in marks:
+                    yy = paper_y0 + mark_y * (paper_y1 - paper_y0)
+                    if abs(y - yy) <= dimension * 0.022:
+                        mx1 = paper_x1 - dimension * 0.075
+                        mx0 = mx1 - dimension * 0.105
+                        if mx0 <= x <= mx1:
+                            r, g, b = colour
+                            break
+
+            pixels[y * dimension + x] = (
+                int(clamp(r, 0, 255)), int(clamp(g, 0, 255)), int(clamp(b, 0, 255)), alpha
+            )
+
+    # Box downsample.
     out = []
-    ss = supersample
+    n = scale * scale
     for y in range(SIZE):
         for x in range(SIZE):
-            rs = gs = bs = asum = 0
-            for dy in range(ss):
-                rowoff = (y * ss + dy) * W
-                for dx in range(ss):
-                    r0, g0, b0, a0 = img[rowoff + x * ss + dx]
-                    rs += r0; gs += g0; bs += b0; asum += a0
-            n = ss * ss
-            out.append((rs // n, gs // n, bs // n, asum // n))
+            rs = gs = bs = 0
+            base_row = (y * scale) * dimension
+            for dy in range(scale):
+                offset = base_row + dy * dimension + x * scale
+                for dx in range(scale):
+                    r0, g0, b0, _ = pixels[offset + dx]
+                    rs += r0
+                    gs += g0
+                    bs += b0
+            out.append((rs // n, gs // n, bs // n, 255))
     return out
 
-base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-icons_dir = os.path.join(base, "SourceDesk", "Resources", "Assets.xcassets", "AppIcon.appiconset")
-os.makedirs(icons_dir, exist_ok=True)
-src = os.path.join(icons_dir, "master.png")
-pixels = draw(supersample=2)
-write_png(src, SIZE, SIZE, pixels)
-print("wrote", src)
 
-sizes = {
-    "icon_16x16.png": 16, "icon_16x16@2x.png": 32,
-    "icon_32x32.png": 32, "icon_32x32@2x.png": 64,
-    "icon_128x128.png": 128, "icon_128x128@2x.png": 256,
-    "icon_256x256.png": 256, "icon_256x256@2x.png": 512,
-    "icon_512x512.png": 512, "icon_512x512@2x.png": 1024,
-}
-for name, sz in sizes.items():
-    dest = os.path.join(icons_dir, name)
-    os.system(f'sips -z {sz} {sz} "{src}" --out "{dest}" >/dev/null 2>&1')
-    print("made", name, sz)
+def main():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    docs_dir = os.path.join(root, "docs")
+    assets_dir = os.path.join(root, "Assets")
+    iconset_dir = os.path.join(assets_dir, "AppIcon.iconset")
+    os.makedirs(docs_dir, exist_ok=True)
+    os.makedirs(iconset_dir, exist_ok=True)
+
+    pixels = draw()
+
+    master = os.path.join(assets_dir, "AppIcon-1024.png")
+    write_png(master, SIZE, SIZE, pixels)
+    print("wrote", os.path.relpath(master, root))
+
+    readme_icon = os.path.join(docs_dir, "icon.png")
+    write_png(readme_icon, SIZE, SIZE, pixels)
+    print("wrote", os.path.relpath(readme_icon, root))
+
+    sizes = {
+        "icon_16x16.png": 16, "icon_16x16@2x.png": 32,
+        "icon_32x32.png": 32, "icon_32x32@2x.png": 64,
+        "icon_128x128.png": 128, "icon_128x128@2x.png": 256,
+        "icon_256x256.png": 256, "icon_256x256@2x.png": 512,
+        "icon_512x512.png": 512, "icon_512x512@2x.png": 1024,
+    }
+    for name, size in sizes.items():
+        destination = os.path.join(iconset_dir, name)
+        result = subprocess.run(
+            ["sips", "-z", str(size), str(size), master, "--out", destination],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
+        )
+        if result.returncode != 0:
+            print(f"  ! could not write {name} (sips is macOS-only)", file=sys.stderr)
+
+    icns = os.path.join(assets_dir, "AppIcon.icns")
+    result = subprocess.run(
+        ["iconutil", "-c", "icns", iconset_dir, "-o", icns],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
+    )
+    if result.returncode == 0:
+        print("wrote", os.path.relpath(icns, root))
+    else:
+        print("  ! iconutil is unavailable; the .iconset is still complete", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
