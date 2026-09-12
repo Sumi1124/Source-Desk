@@ -251,32 +251,34 @@ struct ModelMenu: View {
     var body: some View {
         Menu {
             ForEach(app.providers.all, id: \.identifier) { provider in
-                Section(provider.displayName) {
-                    Button {
-                        app.updateSettings { $0.preferredProviderID = provider.identifier }
-                        Task { await app.loadModels(for: provider.identifier) }
-                    } label: {
-                        HStack {
-                            Text(provider.isLocal ? "Local provider" : "Cloud provider")
-                            if provider.identifier == app.settings.preferredProviderID {
-                                Image(systemName: "checkmark")
+                let section = app.menuSection(for: provider)
+                Section(section.displayName) {
+                    // An unconfigured provider is still listed: the user needs to see
+                    // what the choice contains. Choosing a model the provider cannot run
+                    // reports what is missing instead of quietly implying it will answer.
+                    if let statusLine = section.statusLine {
+                        Text(statusLine)
+                    }
+
+                    if section.rows.isEmpty {
+                        if let emptyLine = section.emptyLine { Text(emptyLine) }
+                    } else {
+                        ForEach(section.rows) { row in
+                            Button {
+                                select(provider: provider, model: row.model)
+                            } label: {
+                                if isSelected(provider: provider, model: row.model) {
+                                    Label("\(row.model.name) — \(row.model.detailLine)", systemImage: "checkmark")
+                                } else {
+                                    Text("\(row.model.name) — \(row.model.detailLine)")
+                                }
                             }
                         }
                     }
-                    let models = app.availableModels[provider.identifier] ?? []
-                    if models.isEmpty {
-                        Text(statusText(for: provider))
-                    } else {
-                        ForEach(models.filter { !$0.supportsEmbeddings }) { model in
-                            Button {
-                                app.updateSettings {
-                                    $0.preferredProviderID = provider.identifier
-                                    $0.modelSelection[provider.identifier] = model.name
-                                }
-                            } label: {
-                                Text("\(model.name) — \(model.detailLine)")
-                            }
-                        }
+
+                    Button("Use \(section.displayName)") {
+                        app.updateSettings { $0.preferredProviderID = provider.identifier }
+                        Task { await app.loadModels(for: provider.identifier) }
                     }
                 }
             }
@@ -314,6 +316,26 @@ struct ModelMenu: View {
         case .unavailable(let reason): return reason
         case .ready: return app.probedProviders.contains(provider.identifier) ? "No models found" : "Checking…"
         case nil: return provider.isLocal ? "Local provider" : "Cloud provider"
+        }
+    }
+
+    private func isSelected(provider: AIProvider, model: ModelDescriptor) -> Bool {
+        app.settings.preferredProviderID == provider.identifier
+            && app.settings.model(for: provider.identifier) == model.name
+    }
+
+    /// Selecting a model the provider cannot currently run still records the choice —
+    /// the user may be about to add a key — but says plainly what is missing rather
+    /// than letting the picker imply the model is usable.
+    private func select(provider: AIProvider, model: ModelDescriptor) {
+        app.updateSettings {
+            $0.preferredProviderID = provider.identifier
+            $0.modelSelection[provider.identifier] = model.name
+        }
+        if let availability = app.modelDiscoveryState[provider.identifier],
+           !availability.isReady,
+           let reason = availability.reason {
+            app.statusMessage = "\(provider.displayName): \(reason)"
         }
     }
 }

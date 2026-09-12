@@ -496,25 +496,50 @@ public final class AppState {
         let availability = await provider.availability()
         modelDiscoveryState[providerID] = availability
 
-        guard availability.isReady else {
-            availableModels[providerID] = []
-            return
-        }
+        // The model list and the *right to use* a provider are separate questions, and
+        // conflating them made the picker useless: Ollama's hosted catalogue can be
+        // listed without a key, and Anthropic's model names are static, so both showed
+        // an empty section that looked like a broken provider. List whatever can be
+        // listed; the availability state is what stops the user actually running a
+        // model, and it is displayed alongside.
         do {
             let models = try await provider.availableModels()
             availableModels[providerID] = models
-            // Adopt a sensible default model for a provider the user has just chosen.
-            if settings.model(for: providerID).isEmpty, let first = models.first(where: { !$0.supportsEmbeddings }) ?? models.first {
+            // Adopt a sensible default model for a provider the user has just chosen, but
+            // only when it could actually answer — otherwise choosing a provider without
+            // a key would silently rewrite the user's model choice.
+            if availability.isReady,
+               settings.model(for: providerID).isEmpty,
+               let first = models.first(where: { !$0.supportsEmbeddings }) ?? models.first {
                 settings.modelSelection[providerID] = first.name
                 saveSettings()
             }
         } catch let error as SourceDeskError {
-            modelDiscoveryState[providerID] = .unreachable(reason: error.errorDescription ?? "")
+            // A provider that cannot even be listed keeps its availability state, which
+            // already explains why; recording unreachable here would overwrite a more
+            // useful "no API key is stored" with a network-sounding message.
+            if availability.isReady {
+                modelDiscoveryState[providerID] = .unreachable(reason: error.errorDescription ?? "")
+            }
             availableModels[providerID] = []
         } catch {
-            modelDiscoveryState[providerID] = .unreachable(reason: error.localizedDescription)
+            if availability.isReady {
+                modelDiscoveryState[providerID] = .unreachable(reason: error.localizedDescription)
+            }
             availableModels[providerID] = []
         }
+    }
+
+    /// The picker section for one provider, built by the core policy so the rules live
+    /// in one place and can be tested without a UI.
+    func menuSection(for provider: AIProvider) -> ModelMenuPolicy.Section {
+        ModelMenuPolicy.section(
+            providerID: provider.identifier,
+            displayName: provider.displayName,
+            models: availableModels[provider.identifier] ?? [],
+            availability: modelDiscoveryState[provider.identifier],
+            hasBeenProbed: probedProviders.contains(provider.identifier)
+        )
     }
 
     func refreshAllModels() async {

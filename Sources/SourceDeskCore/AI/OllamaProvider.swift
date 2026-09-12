@@ -105,7 +105,11 @@ public struct OllamaProvider: AIProvider {
     public func availableModels() async throws -> [ModelDescriptor] {
         let models = try await OllamaClient(endpoint: endpoint, apiKey: apiKey).listModels()
         return models.map { model in
-            ModelDescriptor(
+            // A reported window is a fact; an inferred one is an estimate and is
+            // labelled as such in the UI.
+            let reportedContext = model.contextLength
+            let inferredContext = reportedContext == nil ? Self.contextLength(for: model) : nil
+            return ModelDescriptor(
                 providerID: identifier,
                 name: model.name,
                 // Hosted models report their uncompressed size, which has nothing to
@@ -114,7 +118,8 @@ public struct OllamaProvider: AIProvider {
                 sizeDescription: isCloud ? nil : model.size.map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) },
                 parameterSize: model.parameterSize ?? Self.parameterSizeGuess(for: model.name),
                 quantization: model.quantization,
-                contextLength: model.contextLength ?? Self.contextLength(for: model),
+                contextLength: reportedContext ?? inferredContext,
+                contextLengthIsEstimated: reportedContext == nil,
                 isLocal: isLocal,
                 supportsEmbeddings: Self.isEmbeddingModel(model),
                 supportsStreaming: true,

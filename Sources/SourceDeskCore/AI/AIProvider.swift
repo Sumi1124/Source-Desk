@@ -11,6 +11,9 @@ public struct ModelDescriptor: Identifiable, Codable, Hashable, Sendable {
     public var parameterSize: String?
     public var quantization: String?
     public var contextLength: Int?
+    /// True when `contextLength` was measured or reported. False when it is an estimate
+    /// inferred from the parameter count, which must not be presented as a fact.
+    public var contextLengthIsEstimated: Bool = false
     public var isLocal: Bool
     public var supportsEmbeddings: Bool
     public var supportsStreaming: Bool
@@ -26,6 +29,7 @@ public struct ModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         parameterSize: String? = nil,
         quantization: String? = nil,
         contextLength: Int? = nil,
+        contextLengthIsEstimated: Bool = false,
         isLocal: Bool = true,
         supportsEmbeddings: Bool = false,
         supportsStreaming: Bool = true,
@@ -37,6 +41,7 @@ public struct ModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         self.parameterSize = parameterSize
         self.quantization = quantization
         self.contextLength = contextLength
+        self.contextLengthIsEstimated = contextLengthIsEstimated
         self.isLocal = isLocal
         self.supportsEmbeddings = supportsEmbeddings
         self.supportsStreaming = supportsStreaming
@@ -49,7 +54,14 @@ public struct ModelDescriptor: Identifiable, Codable, Hashable, Sendable {
         if let parameterSize { parts.append(parameterSize) }
         if let quantization { parts.append(quantization) }
         if let sizeDescription { parts.append(sizeDescription) }
-        if let contextLength { parts.append("\(contextLength.formatted()) token context") }
+        if let contextLength {
+            // An inferred window is labelled as an estimate; reporting a guess as the
+            // model's real context window is the kind of small lie that makes a whole
+            // interface untrustworthy.
+            parts.append(contextLengthIsEstimated
+                         ? "~\(contextLength.formatted()) token context (est.)"
+                         : "\(contextLength.formatted()) token context")
+        }
         if parts.isEmpty { parts.append(isLocal ? "Local model" : "Cloud model") }
         return parts.joined(separator: " · ")
     }

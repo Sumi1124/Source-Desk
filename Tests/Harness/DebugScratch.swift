@@ -6,6 +6,10 @@ import SourceDeskCore
 /// Kept in the repository because it is genuinely useful: it drives the hosted Ollama
 /// API through the same code the app uses, which is how the shape of that endpoint
 /// (blank `details`, unauthenticated catalogue, uncompressed sizes) was established.
+///
+/// It also prints exactly what the toolbar's model menu is built from, provider by
+/// provider, so "is the Ollama Cloud choice visible?" is answered by the code that
+/// renders it rather than by reading source.
 enum DebugScratch {
 
     static func run() {
@@ -22,8 +26,6 @@ enum DebugScratch {
             let availability = await provider.availability()
             print("availability: \(availability)")
 
-            // The catalogue is readable without a key, which is what lets the app show
-            // what exists before the user has created one.
             do {
                 let models = try await provider.availableModels()
                 print("models:       \(models.count)")
@@ -37,7 +39,6 @@ enum DebugScratch {
                 print("models failed: \(error)")
             }
 
-            // With no key, generation must say exactly that — not a bare 401.
             do {
                 _ = try await provider.generate(AIRequest(messages: [.user("hi")], model: "gpt-oss:120b"))
                 print("generate:     UNEXPECTED SUCCESS (is a key configured?)")
@@ -50,6 +51,40 @@ enum DebugScratch {
             semaphore.signal()
         }
         if semaphore.wait(timeout: .now() + 45) == .timedOut { print("TIMED OUT") }
+
+        print("")
+        print("--- what the toolbar model menu is built from ---")
+        // The same registry the app builds, then the same policy the menu renders from.
+        // Listing is attempted regardless of configuration, which is the fix under test.
+        let registry = ProviderRegistry.standard(
+            ollamaEndpoint: URL(string: "http://127.0.0.1:11434")!,
+            ollamaCloudEndpoint: OllamaProvider.cloudEndpoint,
+            keychain: EmptyKeychain()
+        )
+        let menuSemaphore = DispatchSemaphore(value: 0)
+        Task {
+            for provider in registry.all {
+                let availability = await provider.availability()
+                let models = (try? await provider.availableModels()) ?? []
+                let section = ModelMenuPolicy.section(
+                    providerID: provider.identifier,
+                    displayName: provider.displayName,
+                    models: models,
+                    availability: availability,
+                    hasBeenProbed: true
+                )
+                print("section \u{201C}\(section.displayName)\u{201D}  models=\(section.rows.count)  usable=\(section.hasUsableModel)")
+                if let statusLine = section.statusLine { print("    status: \(statusLine)") }
+                if let emptyLine = section.emptyLine { print("    empty:  \(emptyLine)") }
+                for row in section.rows.prefix(5) {
+                    print("    row: \(row.model.name) — \(row.model.detailLine)")
+                }
+                if section.rows.count > 5 { print("    \u{2026} \(section.rows.count - 5) more") }
+            }
+            menuSemaphore.signal()
+        }
+        if menuSemaphore.wait(timeout: .now() + 60) == .timedOut { print("MENU TIMED OUT") }
+
         print("--- done ---")
     }
 }
