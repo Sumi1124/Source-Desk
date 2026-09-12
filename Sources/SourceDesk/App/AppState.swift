@@ -123,8 +123,13 @@ public final class AppState {
     init(paths: AppPaths = .standard()) {
         self.paths = paths
         self.providers = ProviderRegistry.standard(ollamaEndpoint: URL(string: "http://127.0.0.1:11434")!)
+        // The observer fires on a background queue. `self` is captured weakly and only
+        // read inside the main-actor hop, which is what makes this safe — but Swift 5.10
+        // rejects even a weak capture referenced from a concurrent context, so the weak
+        // reference is taken into a local first and the Task captures that instead of
+        // `self` itself.
         network.observe { [weak self] status in
-            Task { @MainActor in self?.networkStatus = status }
+            Task { @MainActor [weak self] in self?.networkStatus = status }
         }
     }
 
@@ -679,15 +684,18 @@ public final class AppState {
                 ) { [weak self] progress in
                     let stage = progress.stage.displayName
                     let title = progress.title
-                    Task { @MainActor in
+                    let overall = progress.itemIndex > 1
+                        ? Double(progress.itemIndex - 1) / Double(max(1, progress.itemCount))
+                        : 0
+                    let itemIndex = progress.itemIndex
+                    let itemCount = progress.itemCount
+                    Task { @MainActor [weak self] in
                         self?.ingestion = IngestionProgress(
                             title: title.isEmpty ? trimmedTopic : title,
                             stage: stage,
-                            overall: progress.itemIndex > 1
-                                ? Double(progress.itemIndex - 1) / Double(max(1, progress.itemCount))
-                                : 0,
-                            itemIndex: progress.itemIndex,
-                            itemCount: progress.itemCount
+                            overall: overall,
+                            itemIndex: itemIndex,
+                            itemCount: itemCount
                         )
                     }
                 }

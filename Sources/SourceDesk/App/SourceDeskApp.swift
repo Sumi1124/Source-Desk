@@ -88,6 +88,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 /// Menu items are wired to the same actions the views use, so keyboard shortcuts and
 /// buttons can never drift apart.
+///
+/// `@MainActor` is explicit because menu actions touch `AppState`, which is main-actor
+/// isolated. Swift 6 infers this for `Commands`; Swift 5.10 does not, and rejects the
+/// whole file.
+@MainActor
 struct SourceDeskCommands: Commands {
     let app: AppState
 
