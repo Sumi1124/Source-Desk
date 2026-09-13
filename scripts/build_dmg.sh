@@ -13,7 +13,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-VERSION="${1:-1.0.0}"
+# The version is read from the built bundle, which in turn takes it from the git tag, so
+# the disk image name cannot disagree with the release it is attached to.
+VERSION="${1:-$(defaults read "$(dirname "$0")/../build/SourceDesk.app/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || echo 0.0.0)}"
 OUTPUT_DIR="${2:-build}"
 APP="build/SourceDesk.app"
 VOLUME_NAME="SourceDesk ${VERSION}"

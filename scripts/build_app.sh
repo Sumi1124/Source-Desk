@@ -107,8 +107,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key>      <string>com.sourcedesk.app</string>
     <key>CFBundleIconFile</key>        <string>AppIcon</string>
     <key>CFBundlePackageType</key>     <string>APPL</string>
-    <key>CFBundleShortVersionString</key> <string>1.0.0</string>
-    <key>CFBundleVersion</key>         <string>1</string>
+    <key>CFBundleShortVersionString</key> <string>__VERSION__</string>
+    <key>CFBundleVersion</key>         <string>__BUILD__</string>
     <key>LSMinimumSystemVersion</key>  <string>14.0</string>
     <key>NSHighResolutionCapable</key> <true/>
     <key>NSSupportsAutomaticTermination</key> <false/>
@@ -125,6 +125,15 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+# The version comes from the tag being built, so the bundle can never disagree with the
+# release it is attached to. A hardcoded string did exactly that once: the bundle said
+# 1.0.0 while the release was v1.0.1.
+SOURCEDESK_VERSION="${SOURCEDESK_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.0.0)}"
+SOURCEDESK_BUILD="${SOURCEDESK_BUILD:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
+/usr/bin/sed -i '' -e "s/__VERSION__/$SOURCEDESK_VERSION/" -e "s/__BUILD__/$SOURCEDESK_BUILD/" \
+  "$APP/Contents/Info.plist"
+echo "  version $SOURCEDESK_VERSION (build $SOURCEDESK_BUILD)"
 
 # Ad-hoc sign so macOS accepts the bundle locally. Not a Developer ID signature:
 # a downloaded copy will still need right-click → Open the first time.
