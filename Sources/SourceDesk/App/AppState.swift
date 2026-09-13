@@ -210,12 +210,11 @@ public final class AppState {
             existingNotebookCount: notebooks.count
         ) {
             let title = OnboardingPolicy.starterNotebookTitle
-            if let notebook = createNotebook(title: title, summary: OnboardingPolicy.starterNotebookSummary) {
+            if createNotebook(title: title, summary: OnboardingPolicy.starterNotebookSummary) != nil {
                 DiagnosticsLog.shared.info("Created starter notebook", category: "onboarding")
                 // Land the user in Sources, because adding a source is the next thing that
                 // has to happen for the notebook to be worth anything.
                 section = .sources
-                _ = notebook
             }
         }
         onboardingVisible = false

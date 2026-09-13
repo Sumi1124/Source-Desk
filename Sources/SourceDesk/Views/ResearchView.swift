@@ -566,6 +566,7 @@ struct MessageView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tertiary)
+                .accessibilityLabel("Copy the answer")
                 .help("Copy the answer")
 
                 Button {

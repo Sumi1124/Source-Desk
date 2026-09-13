@@ -248,6 +248,7 @@ struct ErrorCard: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.tertiary)
+                .accessibilityLabel("Dismiss")
                 .help("Dismiss")
             }
         }

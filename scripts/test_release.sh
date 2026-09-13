@@ -158,6 +158,18 @@ check "the DMG script uses hdiutil" uses_external_tool scripts/build_dmg.sh hdiu
 # caused a stale-binary bug in this project.
 check "build output is ignored" git check-ignore -q build/SourceDesk.app
 
+# Accessibility is checked against the running window, not the source. An icon-only control
+# with a tooltip but no label looks correct in review and is silent to VoiceOver, so the
+# only honest test is to ask AppKit what it exposes.
+echo ""
+echo "Auditing the accessibility tree…"
+if ./.build/debug/SourceDesk --audit-accessibility > /tmp/sourcedesk-a11y.txt 2>&1; then
+  ok "every interactive control has an accessible name"
+else
+  bad "controls without an accessible name:"
+  sed -n '/UNNAMED CONTROLS/,/^$/p' /tmp/sourcedesk-a11y.txt | tail -n +2 | sed 's/^/     /'
+fi
+
 echo ""
 echo "────────────────────────────────────────────────────────────────"
 if [ "$FAIL" -eq 0 ]; then

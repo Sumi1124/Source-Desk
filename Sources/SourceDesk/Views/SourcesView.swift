@@ -260,6 +260,7 @@ struct SourcesView: View {
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
                 .help("Close")
             }
 
@@ -414,6 +415,8 @@ struct SourcesView: View {
             ))
             .labelsHidden()
             .toggleStyle(.checkbox)
+            // An unlabelled checkbox announces nothing useful; the row title is the label.
+            .accessibilityLabel("Include \(selection.result.title)")
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(selection.result.title.isEmpty ? selection.result.url : selection.result.title)
@@ -880,6 +883,8 @@ struct AddWebsiteSheet: View {
             ))
             .labelsHidden()
             .toggleStyle(.checkbox)
+            // An unlabelled checkbox announces nothing useful; the row title is the label.
+            .accessibilityLabel("Include \(selection.result.title)")
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(selection.result.title.isEmpty ? selection.result.url : selection.result.title)
@@ -1018,6 +1023,7 @@ private struct SourceFilterField: ViewModifier {
                     TextField("Search sources", text: $text)
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
+                        .accessibilityLabel("Search sources")
                     if !text.isEmpty {
                         Button {
                             text = ""
@@ -1027,6 +1033,7 @@ private struct SourceFilterField: ViewModifier {
                                 .foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear the search")
                         .help("Clear the search")
                     }
                 }

@@ -245,6 +245,9 @@ private struct SidebarFilter: ViewModifier {
                     TextField("Filter notebooks", text: $text)
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
+                        // A plain TextField exposes its placeholder as the title, but the
+                        // prompt is not announced as a label once it is typed over.
+                        .accessibilityLabel("Filter notebooks")
                     if !text.isEmpty {
                         Button {
                             text = ""
@@ -254,6 +257,7 @@ private struct SidebarFilter: ViewModifier {
                                 .foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear the filter")
                         .help("Clear the filter")
                     }
                 }

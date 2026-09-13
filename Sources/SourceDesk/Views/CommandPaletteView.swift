@@ -37,6 +37,7 @@ struct CommandPaletteView: View {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Clear the search")
                     }
                 }
                 .padding(.horizontal, Design.spacingMedium)

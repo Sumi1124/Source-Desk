@@ -127,13 +127,19 @@ struct RootView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             Picker("Section", selection: sectionBinding) {
+                // `Label` with a systemImage makes a segmented picker draw icon-only
+                // segments, so the symbol's name — "bubble.left.and.text.bubble.right" — was
+                // what VoiceOver announced. The segments now read as text, which is both
+                // clearer on screen and correct for assistive clients.
                 ForEach(AppState.Section.allCases) { section in
-                    Label(section.displayName, systemImage: section.symbolName).tag(section)
+                    Text(section.displayName).tag(section)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .frame(width: 340)
+            .accessibilityLabel("Section")
+            .accessibilityValue(app.section.displayName)
             .help("Switch between research, sources, notes, study tools and search")
         }
 
@@ -142,43 +148,82 @@ struct RootView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
-            NetworkIndicator()
-
-            Button {
-                app.commandPaletteVisible = true
-            } label: {
-                Image(systemName: "command")
-            }
-            .help("Command palette (⌘K)")
-
-            Menu {
-                Button("Find Sources by Topic…") {
+            AppToolbarActions(
+                onCommandPalette: { app.commandPaletteVisible = true },
+                onAddWebsite: { addWebsiteVisible = true },
+                onAddFiles: { presentFileImporter() },
+                onAddPastedText: { addPastedTextVisible = true },
+                onFindSources: {
                     app.section = .sources
                     NotificationCenter.default.post(name: .openFindSources, object: nil)
+                },
+                onResearch: { app.requestResearch(kind: .addSources) },
+                onResearchNote: { app.requestResearch(kind: .createNote) },
+                onExport: { exportVisible = true },
+                onImport: { importVisible = true }
+            )
+        }
+    }
+
+    /// The toolbar's trailing controls: network state, the command palette, and the add menu.
+    ///
+    /// Extracted from the `ToolbarContentBuilder` into a plain view so the same controls can be
+    /// composed outside a window. SwiftUI installs `.toolbar { }` items only for a real scene,
+    /// so an offscreen capture of this app showed a title bar with an empty toolbar — the one
+    /// image a reader judges. Sharing the views means the capture cannot drift from the app.
+    @MainActor
+    struct AppToolbarActions: View {
+        @Environment(AppState.self) private var app
+
+        let onCommandPalette: () -> Void
+        let onAddWebsite: () -> Void
+        let onAddFiles: () -> Void
+        let onAddPastedText: () -> Void
+        let onFindSources: () -> Void
+        let onResearch: () -> Void
+        let onResearchNote: () -> Void
+        let onExport: () -> Void
+        let onImport: () -> Void
+
+        var body: some View {
+            HStack(spacing: Design.spacingSmall) {
+                NetworkIndicator()
+
+                Button(action: onCommandPalette) {
+                    Image(systemName: "command")
                 }
-                Button("Add Website…") { addWebsiteVisible = true }
-                Button("Add Files…") { presentFileImporter() }
-                Button("Paste Text…") { addPastedTextVisible = true }
+                // VoiceOver does not read .help(), so an icon-only control needs its own label.
+                .accessibilityLabel("Command palette")
+                .help("Command palette (⌘K)")
+
+            Menu {
+                Button("Find Sources by Topic…", action: onFindSources)
+                Button("Add Website…", action: onAddWebsite)
+                Button("Add Files…", action: onAddFiles)
+                Button("Paste Text…", action: onAddPastedText)
                 Divider()
                 // Research adds the top results without asking; Find Sources shows the
                 // AI's picks for approval first. Both are useful, so both are offered and
                 // named for the difference.
-                Button("Research a Topic (auto-add)…") { app.requestResearch(kind: .addSources) }
-                Button("Research & Write a Note…") { app.requestResearch(kind: .createNote) }
+                Button("Research a Topic (auto-add)…", action: onResearch)
+                Button("Research & Write a Note…", action: onResearchNote)
                 Divider()
-                Button("Export Notebook…") { exportVisible = true }
-                Button("Import Notebook…") { importVisible = true }
+                Button("Export Notebook…", action: onExport)
+                Button("Import Notebook…", action: onImport)
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityLabel("Add")
             .help("Add sources, research a topic, or move notebooks")
 
             Button {
                 app.updateSettings { $0.showInspector.toggle() }
             } label: {
-                Image(systemName: app.settings.showInspector ? "sidebar.right" : "sidebar.right")
+                Image(systemName: "sidebar.right")
             }
+            .accessibilityLabel(app.settings.showInspector ? "Hide the inspector" : "Show the inspector")
             .help(app.settings.showInspector ? "Hide the inspector" : "Show the inspector")
+            }
         }
     }
 
@@ -262,7 +307,7 @@ struct WorkingAreaView: View {
                         symbol: "books.vertical",
                         title: "No notebook selected",
                         message: "Notebooks hold their own sources, conversations, notes and study material. Create one to begin.",
-                        primaryAction: ("New Notebook", { app.createNotebook(title: "Untitled notebook") }),
+                        primaryAction: ("New Notebook", { _ = app.createNotebook(title: "Untitled notebook") }),
                         secondaryAction: ("Import a Notebook…", { NotificationCenter.default.post(name: .importNotebook, object: nil) })
                     )
                 } else {
@@ -453,7 +498,8 @@ struct CloudConsentSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 6) {
-                Label("This notebook has \(app.sources.count) source\(app.sources.count == 1 ? "" : "s"), \(try? app.store?.chunkCount(notebookID: app.selectedNotebookID ?? "") ?? 0) passages.", systemImage: "doc.on.doc")
+                let passageCount = (try? app.store?.chunkCount(notebookID: app.selectedNotebookID ?? "")) ?? 0
+                Label("This notebook has \(Format.count(app.sources.count, "source")), \(Format.count(passageCount, "passage")).", systemImage: "doc.on.doc")
                 Label("Approval applies to this notebook only.", systemImage: "checkmark.shield")
                 Label("You can revoke it at any time in Settings → Privacy.", systemImage: "lock.rotation")
             }

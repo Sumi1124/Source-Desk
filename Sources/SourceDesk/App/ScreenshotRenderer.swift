@@ -257,6 +257,54 @@ enum ScreenshotRenderer {
         try? FileManager.default.removeItem(at: paths.root)
     }
 
+    /// Window size for the root capture. Overridable with `SOURCEDESK_WINDOW_SIZE=WxH`, so a
+    /// layout can be checked at a different width without a code change.
+    @MainActor
+    static var defaultRootSize: NSSize {
+        if let raw = ProcessInfo.processInfo.environment["SOURCEDESK_WINDOW_SIZE"] {
+            let parts = raw.lowercased().split(separator: "x")
+            if parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]) {
+                return NSSize(width: w, height: h)
+            }
+        }
+        return NSSize(width: 1_360, height: 800)
+    }
+
+    /// The window's toolbar strip, drawn from the app's own controls.
+    ///
+    /// SwiftUI installs `.toolbar { }` items only for a real scene; a window built offscreen
+    /// gets the strip reserved but never filled, which is why an early version of these
+    /// screenshots showed a title bar with nothing under it. This composes the same views the
+    /// toolbar uses — `AppToolbarActions`, the section picker, `ModelMenu` — through their one
+    /// shared definition, so the image cannot drift from the app.
+    @MainActor
+    static func toolbarStrip(width: CGFloat) -> some View {
+        HStack(spacing: Design.spacingMedium) {
+            Picker("Section", selection: .constant(AppState.Section.research)) {
+                ForEach(AppState.Section.allCases) { section in
+                    Text(section.displayName).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 340)
+
+            Spacer(minLength: Design.spacingSmall)
+
+            ModelMenu()
+
+            Spacer(minLength: Design.spacingSmall)
+
+            RootView.AppToolbarActions(
+                onCommandPalette: {}, onAddWebsite: {}, onAddFiles: {}, onAddPastedText: {},
+                onFindSources: {}, onResearch: {}, onResearchNote: {}, onExport: {}, onImport: {}
+            )
+        }
+        .padding(.horizontal, Design.spacingMedium)
+        .frame(width: width, height: 52)
+        .background(.bar)
+    }
+
     /// The application's real root view, hosted as the window's content.
     ///
     /// This is what the running app shows: `NavigationSplitView`, the sidebar, the section
@@ -265,8 +313,10 @@ enum ScreenshotRenderer {
     /// drift from the product, and SwiftUI resolves `.searchable` placements the way the app
     /// does. The previous hand-composed version put both the sidebar's and the sources' search
     /// into one window toolbar, which AppKit refuses as a duplicate identifier and traps on.
-    private static func rootWindow(size: NSSize = NSSize(width: 1_360, height: 800)) -> some View {
-        RootView()
+    @MainActor
+    private static func rootWindow(size requested: NSSize? = nil) -> some View {
+        let size = requested ?? defaultRootSize
+        return RootView()
             .frame(width: size.width, height: size.height)
     }
 
@@ -282,9 +332,16 @@ enum ScreenshotRenderer {
     private static func columns(
         size: NSSize = NSSize(width: 1_360, height: 800),
         includeSidebar: Bool = true,
-        includeInspector: Bool = true
+        includeInspector: Bool = true,
+        includeToolbar: Bool = true
     ) -> some View {
-        HStack(spacing: 0) {
+        // The toolbar is drawn above the split, where the real window puts it.
+        VStack(spacing: 0) {
+            if includeToolbar {
+                toolbarStrip(width: size.width)
+                Divider()
+            }
+            HStack(spacing: 0) {
             if includeSidebar {
                 VStack(spacing: 0) {
                     SidebarView(onAddWebsite: {}, onAddFiles: {}, onAddPastedText: {}, inlineFilterField: true)
@@ -301,6 +358,8 @@ enum ScreenshotRenderer {
                     .frame(width: Design.inspectorWidth)
                     .background(Color(nsColor: .windowBackgroundColor))
             }
+            }
+            .frame(height: size.height - (includeToolbar ? 53 : 0))
         }
         .frame(width: size.width, height: size.height)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -361,17 +420,26 @@ enum ScreenshotRenderer {
         size: NSSize? = nil
     ) -> Bool {
         let appearance: NSAppearance.Name = darkMode ? .darkAqua : .aqua
-        let hosting = NSHostingView(
+        // `NSHostingController`, not a bare `NSHostingView`.
+        //
+        // SwiftUI's `.toolbar { }` content is installed into the *window's* toolbar by the
+        // hosting layer, and only `NSHostingController` acts as the window's content view
+        // controller — the bridge that gives SwiftUI enough of a scene to do that. Hosted in
+        // a plain `NSHostingView` the toolbar is never installed, so the capture showed a
+        // title bar with nothing under it while the live app showed the real toolbar. That
+        // difference is invisible in code review and obvious in the images.
+        let hosting = NSHostingController(
             rootView: view
                 .environment(\.colorScheme, darkMode ? .dark : .light)
         )
+        let hostingView = hosting.view
 
-        var contentSize = size ?? hosting.fittingSize
+        var contentSize = size ?? hostingView.fittingSize
         if contentSize.width < 1 || contentSize.height < 1 {
             contentSize = NSSize(width: 1_120, height: 780)
         }
         let frame = CGRect(origin: .zero, size: contentSize)
-        hosting.frame = frame
+        hostingView.frame = frame
 
         // Deliberately *not* `.fullSizeContentView`: the chrome is what this needs, and
         // letting content extend under the title bar made the theme frame and the hosting
@@ -386,9 +454,22 @@ enum ScreenshotRenderer {
         window.appearance = NSAppearance(named: appearance)
         window.isReleasedWhenClosed = false
         window.title = title
+        // A unified toolbar is what the real app uses. Set before the content view so AppKit
+        // reserves the strip as soon as SwiftUI installs its items.
+        window.toolbarStyle = .unified
         // A window whose content is unpainted would otherwise capture against black.
         window.backgroundColor = .windowBackgroundColor
-        window.contentView = hosting
+        // An explicitly owned toolbar for SwiftUI to populate.
+        //
+        // SwiftUI installs `.toolbar { }` items into a toolbar the window already has; it does
+        // not create one on a window assembled outside a `Scene`. Without this, the capture
+        // showed a title bar with no controls under it while the live app showed them.
+        let ownedToolbar = NSToolbar(identifier: "sourcedesk-capture")
+        ownedToolbar.displayMode = .iconAndLabel
+        ownedToolbar.allowsUserCustomization = false
+        window.toolbar = ownedToolbar
+
+        window.contentViewController = hosting
 
         // No NSToolbar is installed.
         //
@@ -401,14 +482,33 @@ enum ScreenshotRenderer {
         // search field, because those live in the content SwiftUI renders.
         _ = showsToolbar
 
-        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000)) // off-screen, still laid out
-        window.orderFrontRegardless()
+        // Off-screen but *ordered front*, and made key.
+        //
+        // SwiftUI installs the window's `NSToolbar` — where `.toolbar { }` content such as the
+        // section picker, the model menu and the network indicator live — only once the window
+        // is on screen and key. A window that is merely ordered front without becoming key, or
+        // one that is never displayed at all, silently ends up with no toolbar, which is how
+        // the first version of these screenshots came to show a title bar but no toolbar.
+        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        window.makeKeyAndOrderFront(nil)
 
-        hosting.layoutSubtreeIfNeeded()
-        // One runloop turn lets SwiftUI resolve materials and lay out list rows.
-        RunLoop.current.run(until: Date().addingTimeInterval(0.35))
-        hosting.layoutSubtreeIfNeeded()
-        hosting.displayIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+        // Several runloop turns: SwiftUI resolves materials and lays out list rows, and AppKit
+        // installs the toolbar it synthesises from `.toolbar { }`. One short turn was not
+        // enough for the toolbar to appear.
+        for _ in 0..<8 {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            hostingView.layoutSubtreeIfNeeded()
+        }
+        hostingView.displayIfNeeded()
+        window.displayIfNeeded()
+
+        if ProcessInfo.processInfo.environment["SOURCEDESK_DEBUG_CHROME"] == "1" {
+            let contentSizeText = "\(hostingView.frame.size)"
+            let themeSize = window.contentView?.superview?.frame.size ?? .zero
+            let toolbarText = window.toolbar.map { "\($0.items.count) items" } ?? "nil"
+            print("  [chrome] content=\(contentSizeText) themeFrame=\(themeSize) toolbar=\(toolbarText)")
+        }
 
         // The theme frame owns the title bar and toolbar; the content view does not.
         guard let themeFrame = window.contentView?.superview,

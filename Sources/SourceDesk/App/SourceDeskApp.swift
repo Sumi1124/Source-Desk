@@ -74,6 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--render-screenshots") {
             ScreenshotRenderer.runAndExit(arguments: CommandLine.arguments)
         }
+        // Reports the accessibility tree of the real window and exits. Used to check that
+        // icon-only controls are announced, which cannot be verified by reading source.
+        if CommandLine.arguments.contains("--audit-accessibility") {
+            AccessibilityAudit.runAndExit(arguments: CommandLine.arguments)
+        }
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -98,7 +103,7 @@ struct SourceDeskCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("New Notebook") { app.createNotebook(title: "Untitled notebook") }
+            Button("New Notebook") { _ = app.createNotebook(title: "Untitled notebook") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
         }
 

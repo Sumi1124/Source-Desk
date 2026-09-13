@@ -28,6 +28,7 @@ struct ResearchSheet: View {
                         .foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Close")
                 .help("Close")
             }
 
