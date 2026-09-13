@@ -412,7 +412,7 @@ public final class AppState {
             case .searching: return "Searching DuckDuckGo…"
             case .askingAI: return "Asking the model which results are relevant…"
             case .planning(let kept, let searched):
-                return "Selected \(kept) of \(searched) results"
+                return "Selected \(Format.count(kept, "result")) of \(Format.count(searched, "result"))"
             case .fetching(let index, let total, _):
                 return "Downloading \(index) of \(total)"
             case .done(let added, let failed):
@@ -803,7 +803,7 @@ public final class AppState {
                 if let error = first.error {
                     lastError = PresentedError(error)
                 } else {
-                    statusMessage = "Added “\(first.source.title)” · \(first.chunkCount) passages"
+                    statusMessage = "Added “\(first.source.title)” · \(Format.count(first.chunkCount, "passage"))"
                     if let notice = first.notices.first { lastError = PresentedError(title: "Added with a caveat", message: notice, isWarning: true) }
                     selectedSourceID = first.source.id
                 }
@@ -811,7 +811,7 @@ public final class AppState {
                 let added = result.added.count
                 let failed = result.failed.count
                 statusMessage = failed == 0
-                    ? "Added \(added) sources · \(result.chunkCount) passages"
+                    ? "Added \(Format.count(added, "source")) · \(Format.count(result.chunkCount, "passage"))"
                     : "Added \(added) sources · \(failed) failed"
                 if failed > 0 {
                     let first = result.failed[0]
@@ -866,7 +866,7 @@ public final class AppState {
             if let error = result.error {
                 lastError = PresentedError(error)
             } else {
-                statusMessage = "Re-indexed “\(result.source.title)” · \(result.chunkCount) passages"
+                statusMessage = "Re-indexed “\(result.source.title)” · \(Format.count(result.chunkCount, "passage"))"
             }
         }
     }

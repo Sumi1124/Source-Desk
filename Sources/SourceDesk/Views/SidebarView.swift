@@ -10,6 +10,17 @@ struct SidebarView: View {
     let onAddFiles: () -> Void
     let onAddPastedText: () -> Void
 
+    /// When true the notebook filter is a field inside the sidebar rather than
+    /// `.searchable(placement: .sidebar)`.
+    ///
+    /// The native placement attaches its field to the window's toolbar, which only works
+    /// when something actually owns a sidebar column — `NavigationSplitView`, as the app
+    /// uses. Hosted any other way, two panes declaring different `.searchable` placements
+    /// both resolve against the same window toolbar and AppKit raises "NSToolbar already
+    /// contains an item with the identifier com.apple.SwiftUI.search" — a hard trap with no
+    /// error message. Offering an inline field lets the view be composed anywhere.
+    var inlineFilterField = false
+
     @State private var searchText = ""
     @State private var renamingNotebookID: RecordID?
     @State private var renameText = ""
@@ -56,7 +67,7 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-            .searchable(text: $searchText, placement: .sidebar, prompt: "Filter notebooks")
+            .modifier(SidebarFilter(modifierState: inlineFilterField, text: $searchText))
 
             Divider()
 
@@ -212,5 +223,47 @@ private struct NotebookRow: View {
             parts.append(notebook.summary)
         }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Applies either the native sidebar search placement or an inline field.
+///
+/// Extracted so the choice is one line at the call site and the reasoning lives in one
+/// place. See `SidebarView.inlineFilterField`.
+@MainActor
+private struct SidebarFilter: ViewModifier {
+    let modifierState: Bool
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        if modifierState {
+            VStack(spacing: 0) {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    TextField("Filter notebooks", text: $text)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                    if !text.isEmpty {
+                        Button {
+                            text = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear the filter")
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                Divider()
+                content
+            }
+        } else {
+            content.searchable(text: $text, placement: .sidebar, prompt: "Filter notebooks")
+        }
     }
 }

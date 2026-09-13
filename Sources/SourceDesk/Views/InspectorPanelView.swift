@@ -214,7 +214,7 @@ struct SourceInspector: View {
             // Extracted text
             VStack(alignment: .leading, spacing: 5) {
                 SectionHeader("Extracted text")
-                Button(showFullText ? "Hide" : "Show \(Format.count(source.wordCount)) words") {
+                Button(showFullText ? "Hide" : "Show \(Format.words(source.wordCount))") {
                     if !showFullText && fullText.isEmpty {
                         fullText = app.sourceText(for: source)
                     }
@@ -363,7 +363,7 @@ struct ResearchInspector: View {
                     SectionHeader("Retrieval")
                     DetailRow(label: "Query", value: trace.query)
                     DetailRow(label: "Candidates", value: Format.count(trace.candidateCount))
-                    DetailRow(label: "Used", value: "\(trace.hits.count) passages")
+                    DetailRow(label: "Used", value: Format.count(trace.hits.count, "passage"))
                     DetailRow(label: "Context", value: "\(Format.tokens(trace.usedTokens)) / \(Format.tokens(trace.contextBudget)) tokens")
                     DetailRow(label: "Duration", value: Format.milliseconds(trace.durationMilliseconds))
                     DetailRow(label: "Semantic", value: trace.semanticEnabled ? "on" : "off", tint: trace.semanticEnabled ? .green : .secondary)

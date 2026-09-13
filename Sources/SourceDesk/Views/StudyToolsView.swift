@@ -191,9 +191,9 @@ struct StudyToolsView: View {
 
     private var materialLabel: String {
         if let ids = study.effectiveSourceIDs {
-            return "\(ids.count) of \(app.sources.count) sources"
+            return "\(Format.count(ids.count, "source")) of \(Format.count(app.sources.count, "source"))"
         }
-        return "All \(app.sources.count) sources"
+        return "All sources (\(app.sources.count))"
     }
 
     // MARK: Generating

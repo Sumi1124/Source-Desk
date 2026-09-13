@@ -47,6 +47,10 @@ struct SourcesView: View {
     /// Whether the topic panel is open. Kept here rather than in a sheet because searching
     /// for sources is a first-class way to build a notebook, not an aside: the results
     /// belong next to the source list they are about to join.
+    /// Draw the source filter as a field in the pane instead of in the window toolbar.
+    /// See `SidebarView.inlineFilterField` for why this option exists.
+    var inlineSearchField = false
+
     @State private var topicPanelOpen = false
     @State private var topicText = ""
     @State private var keepCount = 4
@@ -78,6 +82,24 @@ struct SourcesView: View {
 
     private var totalBytes: Int64 { app.sources.reduce(0) { $0 + $1.plainTextBytes } }
     private var totalPassages: Int { app.sources.reduce(0) { $0 + $1.chunkCount } }
+    private var totalWords: Int { app.sources.reduce(0) { $0 + $1.wordCount } }
+
+    /// "5 sources · 7 passages · 412 words" — and the size only once it is worth stating.
+    /// A notebook of short sources has no meaningful megabyte figure, and printing one was
+    /// how "Zero KB of text" appeared.
+    private var headerSummary: String {
+        var parts: [String] = [
+            Format.count(app.sources.count, "source"),
+            Format.count(totalPassages, "passage")
+        ]
+        if totalWords > 0 {
+            parts.append(Format.words(totalWords))
+        }
+        if totalBytes >= 100_000 {
+            parts.append(Format.bytes(totalBytes))
+        }
+        return parts.joined(separator: " · ")
+    }
     private var issueCount: Int { app.sources.filter { $0.status == .failed }.count }
 
     var body: some View {
@@ -141,7 +163,7 @@ struct SourcesView: View {
             topicPanelOpen = true
         }
         .confirmationDialog("Remove all sources?", isPresented: $confirmDeleteAll) {
-            Button("Remove all \(app.sources.count) sources", role: .destructive) {
+            Button("Remove all \(Format.count(app.sources.count, "source"))", role: .destructive) {
                 app.deleteAllSources()
             }
             Button("Cancel", role: .cancel) {}
@@ -155,9 +177,15 @@ struct SourcesView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Sources")
                     .font(.system(size: 13, weight: .semibold))
-                Text("\(app.sources.count) source\(app.sources.count == 1 ? "" : "s") · \(Format.count(totalPassages)) passages · \(Format.bytes(totalBytes)) of text")
+                    .lineLimit(1)
+                // Words first because that is what a researcher thinks in; the byte figure
+                // is a secondary detail and only shown once it is large enough to matter.
+                Text(headerSummary)
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(headerSummary)
             }
 
             Spacer(minLength: Design.spacingSmall)
@@ -205,7 +233,11 @@ struct SourcesView: View {
         }
         .padding(.horizontal, Design.spacingMedium)
         .padding(.vertical, Design.spacingSmall)
-        .searchable(text: $searchText, placement: .toolbar, prompt: "Search sources")
+        // `.searchable(placement: .toolbar)` attaches a field to the window toolbar, which
+        // requires the view to be the window's detail content — true in the app, false when
+        // composed offscreen. The inline mode keeps the pane self-contained so it can be
+        // hosted anywhere without fighting the window's toolbar item identifiers.
+        .modifier(SourceFilterField(modifierState: inlineSearchField, text: $searchText))
     }
 
     // MARK: Find-by-topic panel
@@ -490,7 +522,7 @@ struct SourceRow: View {
                     Text(source.displaySubtitle)
                     if app.settings.showSourceWordCounts && source.chunkCount > 0 {
                         Text("·")
-                        Text("\(source.chunkCount) passages")
+                        Text(Format.count(source.chunkCount, "passage"))
                     }
                     if source.plainTextBytes > 0 {
                         Text("·")
@@ -952,7 +984,7 @@ struct AddPastedTextSheet: View {
             }
 
             HStack {
-                Text("\(TextMath.wordCount(text)) words")
+                Text(Format.words(TextMath.wordCount(text)))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -967,5 +999,44 @@ struct AddPastedTextSheet: View {
         }
         .padding(Design.spacingLarge)
         .frame(width: 620, height: 500)
+    }
+}
+
+/// Applies either the native toolbar search placement or an inline field.
+@MainActor
+private struct SourceFilterField: ViewModifier {
+    let modifierState: Bool
+    @Binding var text: String
+
+    func body(content: Content) -> some View {
+        if modifierState {
+            VStack(spacing: 0) {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    TextField("Search sources", text: $text)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                    if !text.isEmpty {
+                        Button {
+                            text = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear the search")
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                Divider()
+                content
+            }
+        } else {
+            content.searchable(text: $text, placement: .toolbar, prompt: "Search sources")
+        }
     }
 }

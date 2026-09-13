@@ -400,7 +400,7 @@ struct RetrievalSummary: View {
             if expanded {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: Design.spacingMedium) {
-                        Text("\(trace.hits.count) passage\(trace.hits.count == 1 ? "" : "s") used")
+                        Text("\(Format.count(trace.hits.count, "passage")) used")
                         Text("\(Format.tokens(trace.usedTokens)) of \(Format.tokens(trace.contextBudget)) tokens")
                         Text("\(trace.candidateCount) candidates")
                     }
@@ -446,7 +446,7 @@ struct RetrievalSummary: View {
     }
 
     private var summaryLine: String {
-        var parts: [String] = ["Retrieved \(trace.hits.count) passage\(trace.hits.count == 1 ? "" : "s")"]
+        var parts: [String] = ["Retrieved \(Format.count(trace.hits.count, "passage"))"]
         var methods: [String] = []
         if trace.semanticEnabled { methods.append("semantic") }
         if trace.keywordEnabled { methods.append("keyword") }

@@ -210,6 +210,9 @@ struct WorkingAreaView: View {
     let onAddWebsite: () -> Void
     let onAddFiles: () -> Void
     let onAddPastedText: () -> Void
+    /// Draws the Sources filter as a field in the pane rather than in the window toolbar.
+    /// True only when the view is composed outside a real window (the screenshot pass).
+    var inlineSearchField = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -257,7 +260,9 @@ struct WorkingAreaView: View {
                     case .research:
                         ResearchView()
                     case .sources:
-                        SourcesView(onAddWebsite: onAddWebsite, onAddFiles: onAddFiles, onAddPastedText: onAddPastedText)
+                        SourcesView(onAddWebsite: onAddWebsite, onAddFiles: onAddFiles,
+                                    onAddPastedText: onAddPastedText,
+                                    inlineSearchField: inlineSearchField)
                     case .notes:
                         NotesView()
                     case .studyTools:

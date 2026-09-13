@@ -68,6 +68,11 @@ universal binary.
 
 ## Screenshots
 
+Every screenshot below is rendered from the app's real SwiftUI views on macOS, at real
+window sizes with the title bar and toolbar included. Dark-mode variants of all of them
+are in [`docs/screenshots/`](docs/screenshots) with a `-dark` suffix — the app follows the
+system appearance throughout.
+
 | | |
 |---|---|
 | ![Sources](docs/screenshots/02-sources.png) **Source management** — status, size, passages | ![Source inspector](docs/screenshots/03-source-inspector.png) **Inspector** — provenance, extracted text, passages |

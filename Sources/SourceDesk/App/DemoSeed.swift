@@ -126,7 +126,7 @@ public enum DemoSeed {
             try store.replaceChunks(sourceID: source.id, notebookID: document.notebook.id, chunks: chunks, embeddings: embeddings)
             source.chunkCount = chunks.count
             _ = try store.upsert(source: source)
-            print("  source: \(document.title) — \(chunks.count) passages")
+            print("  source: \(document.title) — \(Format.count(chunks.count, "passage"))")
         }
 
         // A failed source, so the error handling is visible in the UI.

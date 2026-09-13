@@ -274,8 +274,13 @@ public struct Source: Identifiable, Codable, Hashable, Sendable {
     public var displaySubtitle: String {
         var parts: [String] = [kind.displayName]
         if let siteName, !siteName.isEmpty { parts.append(siteName) }
-        if let pageCount, pageCount > 0 { parts.append("\(pageCount) pages") }
-        else if wordCount > 0 { parts.append("\(wordCount.formatted()) words") }
+        // Inflected, because a single-page PDF and a one-word snippet are both real and
+        // "1 pages" reads as a defect in a list a user scans constantly.
+        if let pageCount, pageCount > 0 {
+            parts.append("\(pageCount.formatted()) page\(pageCount == 1 ? "" : "s")")
+        } else if wordCount > 0 {
+            parts.append("\(wordCount.formatted()) word\(wordCount == 1 ? "" : "s")")
+        }
         return parts.joined(separator: " · ")
     }
 }

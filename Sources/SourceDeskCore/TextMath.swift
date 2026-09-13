@@ -181,3 +181,70 @@ public enum StableHash {
         String(fnv1a(string), radix: 16)
     }
 }
+
+/// User-facing formatting for counts, sizes, dates and durations.
+///
+/// These live in the core rather than in the UI layer because they are pure string
+/// functions, and because the test harness only links the core — text that could not be
+/// tested is how "1 passages" and "Zero KB of text" reached a release screenshot.
+public enum Format {
+    /// A human-readable size.
+    ///
+    /// `ByteCountFormatter` answers the small cases badly: zero comes back as the literal
+    /// string "Zero KB", and anything under a kilobyte rounds to "0 KB" or "1 KB". Both
+    /// read as bugs in a header that is otherwise precise ("5 sources · 7 passages · Zero KB
+    /// of text"), so sub-kilobyte values are reported in bytes and zero is stated as zero.
+    public static func bytes(_ value: Int64) -> String {
+        if value <= 0 { return "0 bytes" }
+        if value < 1_000 { return "\(value) bytes" }
+        return ByteCountFormatter.string(fromByteCount: value, countStyle: .file)
+    }
+
+    /// Counted noun with the right inflection: "1 passage", "7 passages".
+    ///
+    /// Written out because hand-rolled `"\(n) passages"` produced "1 passages" in the
+    /// Sources header, which is the kind of small wrongness that makes an interface feel
+    /// unfinished. Irregular plurals are passed in when a noun needs them.
+    public static func count(_ value: Int, _ singular: String, _ plural: String? = nil) -> String {
+        let noun = value == 1 ? singular : (plural ?? singular + "s")
+        return "\(value.formatted(.number.grouping(.automatic))) \(noun)"
+    }
+
+    /// A word count for source lists, where "1 word" / "58 words" is more useful than a
+    /// byte figure nobody thinks in.
+    public static func words(_ value: Int) -> String {
+        count(value, "word")
+    }
+
+    public static func count(_ value: Int) -> String {
+        value.formatted(.number.grouping(.automatic))
+    }
+
+    public static func relative(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .named
+        return formatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    public static func shortDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    public static func milliseconds(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return value < 1_000 ? "\(value) ms" : String(format: "%.1f s", Double(value) / 1_000)
+    }
+
+    public static func tokens(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return value.formatted(.number.grouping(.automatic))
+    }
+
+    public static func percent(_ value: Double) -> String {
+        String(format: "%.0f%%", value * 100)
+    }
+}

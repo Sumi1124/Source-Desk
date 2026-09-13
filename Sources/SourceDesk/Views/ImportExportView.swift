@@ -32,7 +32,7 @@ struct ExportSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     SectionHeader("Contents")
                     DetailRow(label: "Notebook", value: notebook.title)
-                    DetailRow(label: "Sources", value: "\(app.sources.count) sources · \(Format.count(app.sources.reduce(0) { $0 + $1.chunkCount })) passages")
+                    DetailRow(label: "Sources", value: "\(Format.count(app.sources.count, "source")) · \(Format.count(app.sources.reduce(0) { $0 + $1.chunkCount }, "passage"))")
                     DetailRow(label: "Conversations", value: "\(app.sessions.count) session\(app.sessions.count == 1 ? "" : "s")")
                     DetailRow(label: "Notes", value: "\(app.notes.count)")
                     DetailRow(label: "Stored text", value: Format.bytes(app.sources.reduce(0) { $0 + $1.plainTextBytes }))
@@ -187,7 +187,7 @@ struct ImportSheet: View {
                     DetailRow(label: "Sources", value: "\(manifest.counts.sources)")
                     DetailRow(label: "Passages", value: Format.count(manifest.counts.chunks))
                     DetailRow(label: "Vectors", value: Format.count(manifest.counts.embeddings))
-                    DetailRow(label: "Conversations", value: "\(manifest.counts.sessions) · \(manifest.counts.messages) messages")
+                    DetailRow(label: "Conversations", value: "\(manifest.counts.sessions) · \(Format.count(manifest.counts.messages, "message"))")
                     DetailRow(label: "Notes", value: "\(manifest.counts.notes)")
                     if !manifest.embeddingModels.isEmpty {
                         DetailRow(label: "Embedding models", value: manifest.embeddingModels.joined(separator: ", "))
@@ -281,7 +281,7 @@ struct ImportSheet: View {
                 result = outcome
                 app.reloadAll()
                 app.selectNotebook(outcome.notebook.id)
-                app.statusMessage = "Imported “\(outcome.notebook.title)” · \(outcome.sourceCount) sources"
+                app.statusMessage = "Imported “\(outcome.notebook.title)” · \(Format.count(outcome.sourceCount, "source"))"
             } catch let err as SourceDeskError {
                 error = AppState.PresentedError(err)
             } catch {

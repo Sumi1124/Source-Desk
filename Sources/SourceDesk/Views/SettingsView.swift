@@ -489,7 +489,7 @@ struct RetrievalSettings: View {
                         get: { app.settings.retrievalResultCount },
                         set: { value in app.updateSettings { $0.retrievalResultCount = value } }
                     ), in: 1...40) {
-                        Text("\(app.settings.retrievalResultCount) passages").font(Design.caption)
+                        Text(Format.count(app.settings.retrievalResultCount, "passage")).font(Design.caption)
                     }
                 }
                 LabelledField(label: "Candidates considered", help: "How many passages each retriever pulls before fusion and reranking.") {
