@@ -56,8 +56,14 @@ enum ScreenshotRenderer {
         // The path is fixed rather than derived from the output directory on purpose: the
         // Privacy panel prints the library location, so a per-run path would make every
         // capture byte-different from the last and defeat the staleness check.
+        //
+        // The path is home-relative on purpose: the Privacy panel abbreviates only the real
+        // home directory, so a library under /tmp renders as a literal "/tmp/..." path,
+        // which looks like a developer scratch build in the screenshots. A distinctly named
+        // demo folder under Application Support both reads realistically and cannot collide
+        // with a real library.
         let root = ProcessInfo.processInfo.environment["SOURCEDESK_SEED_ROOT"]
-            ?? "/tmp/sd-screenshot-library"
+            ?? (NSHomeDirectory() + "/Library/Application Support/SourceDesk Demo")
         let paths = AppPaths(root: URL(fileURLWithPath: root))
         try? paths.createDirectories()
 

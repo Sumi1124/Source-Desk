@@ -546,5 +546,5 @@ public enum AppInfo {
     public static let name = "SourceDesk"
     public static let version = "1.0.0"
     public static let tagline = "A local-first AI research notebook for macOS"
-    public static let repository = "https://github.com/sourcedesk/sourcedesk"
+    public static let repository = "https://github.com/Sumi1124/Source-Desk"
 }

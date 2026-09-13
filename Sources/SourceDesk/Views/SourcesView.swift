@@ -129,7 +129,7 @@ struct SourcesView: View {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .font(.system(size: 10))
                                     .foregroundStyle(.orange)
-                                Text("\(issueCount) source\(issueCount == 1 ? "" : "s") could not be added.")
+                                Text(Format.count(issueCount, "source") + " could not be added.")
                                     .font(Design.caption)
                                 Button("Show") { filter = .issues }
                                     .buttonStyle(.link)

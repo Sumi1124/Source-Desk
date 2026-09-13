@@ -222,6 +222,22 @@ if [ -f "$main_shot" ]; then
   fi
 fi
 
+# Readability is arithmetic, so it is measured rather than eyeballed. A row title that is
+# fainter than the caption beneath it shipped once and was visible in every README
+# screenshot; it measured 1.90:1 against a 4.80:1 caption. This asserts the hierarchy holds.
+echo ""
+echo "Contrast"
+if [ -f "$SHOT_DIR/01-research.png" ]; then
+  title_line=$(swift scripts/contrast_check.swift "$SHOT_DIR/01-research.png" 58 514 240 16 title 2>/dev/null | sed -E 's/.*contrast ([0-9.]+):1.*/\1/')
+  if [ -n "$title_line" ] && awk "BEGIN{exit !($title_line >= 4.5)}"; then
+    ok "the sidebar title clears 4.5:1 (measured ${title_line}:1)"
+  else
+    bad "the sidebar title clears 4.5:1 (measured ${title_line:-?}:1)"
+  fi
+else
+  bad "a main-window screenshot exists to measure"
+fi
+
 echo ""
 echo "Auditing the accessibility tree…"
 if ./.build/debug/SourceDesk --audit-accessibility > /tmp/sourcedesk-a11y.txt 2>&1; then

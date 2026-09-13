@@ -20,6 +20,29 @@ import Foundation
 /// unaffected and still work through the same pipeline.
 public struct SourceDiscoveryService: Sendable {
 
+    /// The privacy conditions a cloud provider must satisfy before discovery may consult it.
+    ///
+    /// These mirror `AnswerEngine`'s conditions deliberately: if asking a question needs
+    /// consent, so does sending a topic to the same model.
+    public struct Gate: Sendable {
+        public var localOnlyMode: Bool
+        public var cloudConsentGranted: Bool
+        public var networkIsOnline: Bool
+
+        public init(
+            localOnlyMode: Bool = false,
+            cloudConsentGranted: Bool = false,
+            networkIsOnline: Bool = true
+        ) {
+            self.localOnlyMode = localOnlyMode
+            self.cloudConsentGranted = cloudConsentGranted
+            self.networkIsOnline = networkIsOnline
+        }
+
+        /// Everything permitted — correct when no cloud provider is selected.
+        public static let open = Gate(localOnlyMode: false, cloudConsentGranted: true)
+    }
+
     public struct Options: Sendable {
         /// How many results to present to the model for judgement.
         public var candidatesToConsider: Int
@@ -47,17 +70,20 @@ public struct SourceDiscoveryService: Sendable {
     let provider: AIProvider?
     let model: String
     let options: Options
+    let gate: Gate
 
     public init(
         search: WebSearchService,
         provider: AIProvider?,
         model: String,
-        options: Options = .default
+        options: Options = .default,
+        gate: Gate = .open
     ) {
         self.search = search
         self.provider = provider
         self.model = model
         self.options = options
+        self.gate = gate
     }
 
     public struct Selection: Sendable {
@@ -97,6 +123,34 @@ public struct SourceDiscoveryService: Sendable {
             throw SourceDeskError.invalidURL(trimmed)
         }
         let keep = min(max(1, limit ?? options.fallbackKeep), options.maximumKeep)
+
+        // A cloud provider must never be consulted here without the same consent the answer
+        // path requires. Discovery sends the user's topic and the search-result titles to
+        // the model, so it is governed by exactly the same rules: Local-Only Mode, an
+        // online connection, a configured key, and per-notebook consent. When any is
+        // missing the provider is withheld and the search runs without AI, which the
+        // caller already reports through `aiNotice` — the feature degrades, it does not
+        // silently leak.
+        var provider = provider
+        var withheldNotice: String?
+        if let candidate = provider, !candidate.isLocal {
+            let refusal: String?
+            if gate.localOnlyMode {
+                refusal = "“\(candidate.displayName)” is a cloud provider and Local-Only Mode is on in Settings → Privacy, so the results were chosen without AI."
+            } else if !gate.networkIsOnline {
+                refusal = "No internet connection, so the results were chosen without AI."
+            } else if !candidate.isConfigured {
+                refusal = "\(candidate.displayName) has no API key, so the results were chosen without AI."
+            } else if !gate.cloudConsentGranted {
+                refusal = "Cloud access has not been approved for this notebook, so the results were chosen without AI."
+            } else {
+                refusal = nil
+            }
+            if let refusal {
+                provider = nil
+                withheldNotice = refusal
+            }
+        }
 
         // 1. Optionally let the model turn the user's words into a search query.
         var query = trimmed
@@ -142,7 +196,9 @@ public struct SourceDiscoveryService: Sendable {
 
         // 3. Ask the model which to keep. On any problem, fall back to the top results.
         guard let provider else {
-            aiNotice = "No AI model is available, so the top results were taken."
+            // A withheld cloud provider is named specifically: "no model is available" would
+            // send the user hunting through the model picker for a model they already chose.
+            aiNotice = withheldNotice ?? "No AI model is available, so the top results were taken."
             return Plan(query: query, queryWasRewritten: rewritten, searchedCount: results.count,
                         selections: Self.fallback(results, keep: keep), aiNotice: aiNotice)
         }

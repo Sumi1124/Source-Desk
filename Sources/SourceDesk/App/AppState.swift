@@ -500,10 +500,18 @@ public final class AppState {
     func discoveryService() -> SourceDiscoveryService? {
         guard let provider = currentProvider, !settings.model(for: provider.identifier).isEmpty else { return nil }
         guard let search = webSearch else { return nil }
+        // Discovery sends the topic and the search-result titles to the model, so it is
+        // gated exactly like answering a question. The core enforces this too; passing the
+        // real posture here lets it explain *why* a cloud model was not consulted.
         return SourceDiscoveryService(
             search: search,
             provider: provider,
-            model: settings.model(for: provider.identifier)
+            model: settings.model(for: provider.identifier),
+            gate: SourceDiscoveryService.Gate(
+                localOnlyMode: settings.localOnlyMode,
+                cloudConsentGranted: settings.isCloudApproved(notebookID: selectedNotebookID ?? ""),
+                networkIsOnline: isOnline
+            )
         )
     }
 

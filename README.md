@@ -29,7 +29,7 @@ Open the disk image, drag **SourceDesk** into your Applications folder, and laun
 > If neither line appears in Privacy & Security, right-click → Open works for case 2 as
 > well. The `Read Me First.txt` inside the disk image says the same thing.
 >
-> Only if you prefer a terminal: `xattr -d com.apple.quarantine /Applications/SourceDesk.app`
+> Only if you prefer a terminal: `xattr -dr com.apple.quarantine /Applications/SourceDesk.app`
 
 Requires macOS 14 (Sonoma) or later, on **Apple silicon or Intel** — the release image is a
 universal binary.
@@ -67,15 +67,19 @@ universal binary.
 
 ## What it does
 
-- **Unlimited sources.** Add as many websites, PDFs, DOCX, RTF, EPUB, Markdown,
-  HTML or pasted-text sources as your disk allows. There are no product-imposed
-  caps on source count, notebooks or total size — only the limits of your machine,
-  your storage, and the providers you choose to use.
-- **Answers grounded in your sources, with citations.** Every answer cites the
-  passages it used. Clicking a citation opens the source, the page, the section and
-  the excerpt behind it. Citation markers that do not resolve to a retrieved passage
-  are removed from the answer rather than shown.
-- **Local-first, and honest about it.** Notebooks, sources, extracted text, chunks,
+- **No cap on how much you add.** Add as many websites, PDFs, DOCX, RTF, EPUB,
+  Markdown, HTML or pasted-text sources as your disk allows — there is no limit on
+  source count, notebook count or total library size. Individual safety limits stop a
+  runaway file from filling the disk: 512 MB per imported document, 25 MB per web page
+  (both configurable in Settings → Advanced), and at most 8 pages downloaded in one
+  topic search. A file over its limit is refused with an explanation, never silently
+  truncated.
+- **Answers grounded in your sources, with citations.** Answers cite the passages
+  they used, and clicking a citation opens the source, the page, the section and the
+  excerpt behind it. A marker that does not resolve to a retrieved passage is stripped
+  rather than shown. When a model answers without citing anything, the app says so
+  above the answer instead of presenting it as grounded.
+- **Local-first.** Notebooks, sources, extracted text, chunks,
   vectors, conversations, notes and settings all live in one folder on your Mac.
   Nothing is uploaded by SourceDesk itself. Choose a local model and nothing leaves
   the machine at all.
@@ -111,30 +115,183 @@ captured by hand, so they cannot drift from what the app actually draws.
 | ![Providers](docs/screenshots/07-settings-providers.png) **Providers** — local first, cloud optional | ![Privacy](docs/screenshots/07c-settings-privacy.png) **Privacy** — what leaves the Mac, stated plainly |
 
 These are rendered from the app's own views by `SourceDesk --render-screenshots`;
-regenerate them with `scripts/screenshots.sh`. They cannot drift from the interface,
-because they *are* the interface.
+regenerate them with `scripts/screenshots.sh`.
 
 ## Requirements
 
 - macOS 14 Sonoma or later
-- To build: the **Command Line Tools** (`xcode-select --install`) and Swift 5.10+.
-  Full Xcode is **not** required — this project deliberately avoids macros and any
-  API that needs it, so `swift build` works with the Command Line Tools alone.
+- To build: the **Command Line Tools** (`xcode-select --install`) and Swift 6.0+
+  (verified with 6.2.3). Full Xcode is **not** required — this project deliberately
+  avoids macro-based APIs, so `swift build` works with the Command Line Tools alone.
 - Optional: [Ollama](https://ollama.com) for local models
 - Optional: API keys for OpenAI, Anthropic, and/or a search provider
 
-## Install
+## Using it
+
+#### Setting up a local model
+
+```bash
+brew install ollama          # or download from ollama.com
+ollama serve                 # if it is not already running
+ollama pull llama3.2         # ~2 GB, fast and capable for note-sized questions
+ollama pull nomic-embed-text # optional: better semantic search
+```
+
+Then choose **Ollama** in the toolbar and (optionally) set embeddings to
+*Local model* in Settings → Retrieval.
+
+#### Research a topic
+
+Command palette (⌘K) → **Research & Add Sources…**, or the **+** menu in the toolbar.
+Give it a topic and SourceDesk searches the web, downloads the top results and indexes
+them as ordinary sources — downloaded, extracted, cleaned, chunked and embedded, exactly
+like a page you pasted in yourself. **Research & Write a Note…** does the same and then
+writes a summary note from what it found.
+
+It deliberately does *not* do:
+
+- **It never builds a source out of a search snippet.** A snippet is a fragment of a
+  results page, not the author's text, so treating it as the source would mean citing
+  words the source never wrote. Every researched source is the real page or it is
+  reported as a failure.
+- **It never saves an empty source.** If a page cannot be downloaded, or downloads but
+  yields no readable text, it is marked failed with an explanation rather than appearing
+  in the sidebar as a source that cites nothing.
+
+A run over several pages is cancellable, shows progress per page, and keeps whatever it
+already indexed when cancelled.
+
+#### Ollama's hosted API
+
+Ollama serves one API from two places: a server on your Mac, and `https://ollama.com`,
+where the same `/api/tags`, `/api/chat` and `/api/embed` routes run models far too
+large for a laptop (on 2026-09-13 the hosted catalogue listed 20 models, from 13 GB to
+over 1.5 TB of uncompressed weights). SourceDesk supports both.
+
+To use it: create a key at [ollama.com/settings/keys](https://ollama.com/settings/keys),
+then Settings → AI Providers → **Ollama Cloud** → *Add API Key*. The key goes in the
+Keychain like every other credential.
+
+Both facts below were read from the live endpoint rather than assumed:
+
+- **The catalogue is readable without a key but generation is not.** SourceDesk
+  therefore shows you what exists before you have a key, and tells you plainly that
+  generation needs one — rather than showing an empty list.
+- **Hosted models report no download size.** Their `size` field is the *uncompressed*
+  weight, so it is never presented as a download. The catalogue also leaves `details`
+  blank, so SourceDesk reads the parameter count from the model name — and shows none
+  where the name does not carry one, which is most of them.
+
+Everything else about it is a cloud provider: it requires the per-notebook
+confirmation, it is disabled by Local-Only Mode, it is refused when you are offline,
+and answers from it are labelled as leaving your Mac.
+
+#### Cloud providers
+
+Settings → AI Providers stores keys in the **macOS Keychain** — never in the
+notebook, a settings file, a log or an export. Worth being clear about:
+
+- A **ChatGPT Plus or Claude Pro subscription is not an API key**. SourceDesk uses
+  the official APIs, which are billed separately by those vendors. The app says this
+  in the UI rather than implying otherwise.
+- Cloud use requires a **per-notebook confirmation** before any source text leaves
+  the Mac, and **Local-Only Mode** disables cloud providers entirely.
+
+## How answers stay grounded
+
+```
+Sources → download/extract → clean → chunk → embed → store (SQLite + FTS5)
+                                                              │
+Question ──► hybrid retrieval (semantic + keyword, fused) ─────┘
+             └─► rerank ─► context assembly ─► model ─► citation validation ─► answer
+```
+
+1. **Retrieval** runs semantic vector search and SQLite FTS5 keyword search in
+   parallel and merges the rankings with reciprocal-rank fusion, so losing either
+   method degrades recall instead of breaking search.
+
+   A caveat about "semantic" here: the default embedder is built in and **lexical** —
+   hashed word, bigram and character 4-gram vectors — chosen so the app works with no
+   download and no network. It matches wording well and paraphrases poorly. Point
+   embeddings at `nomic-embed-text` (or an OpenAI embedding model) in Settings →
+   Retrieval for materially better recall on indirect questions. Vector search is an
+   exact scan over stored vectors, which is fast into the tens of thousands of chunks
+   and is not an approximate-nearest-neighbour index.
+2. **Reranking** re-scores candidates on term coverage, phrase proximity and heading
+   agreement — in milliseconds, with no model. A model-based reranker is available
+   and falls back to the lexical one if the model is unavailable.
+3. **Context assembly** assigns `[Source N]` / `[Web N]` markers. Markers are
+   assigned in exactly one place, so a citation can never refer to something that was
+   not in the prompt.
+4. **Validation** re-reads the answer, resolves every marker against the material
+   that was actually supplied, and strips any marker that does not resolve. The
+   retrieval trace (chunks, scores, timings) is stored with the message, so the
+   "show your work" panel works even after a restart or an import.
+
+## Privacy
+
+| Scope | What leaves this Mac |
+|---|---|
+| Local model (including a server elsewhere on your own network) | Nothing. Model, embeddings and index all run on hardware you control. |
+| Ollama's hosted API, OpenAI, Anthropic | The retrieved passages and your question, sent to your chosen provider. |
+| Web search | Your search query, sent to your chosen search provider. |
+| Find sources by topic | Your topic and the returned result titles, sent to your chosen model so it can judge relevance. With Local-Only Mode on, or with a cloud model not yet approved for the notebook, the model is skipped and the top results are used instead — the app says so above the results. |
+| Fetching a page | The page URL, to the site itself, with a `SourceDesk/1.0` user-agent naming this repository. |
+| Everything else | Nothing. No telemetry, no analytics, no accounts, no update pings. |
+
+Everything lives in `~/Library/Application Support/SourceDesk/` — `library.sqlite` plus a
+`content/` folder of the text you have stored. Nothing syncs it anywhere.
+
+To remove it all: quit SourceDesk, drag it to the Trash, and delete that folder.
+
+Settings → Privacy shows this table live, including which notebooks you have
+approved for cloud use, with a revoke button for each. See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#privacy-model) for the details.
+
+## Import and export
+
+`⇧⌘E` exports the current notebook to a `.nbk` archive — a plain zip:
+
+```
+My Notebook/
+├── notebook.json        notebook, sources, sessions, notes, chunks
+├── sources/<id>/        content.txt, original files
+├── chats/*.md           readable transcripts
+├── notes/*.md           readable notes
+└── embeddings/*.jsonl   optional vectors, so an import need not re-embed
+```
+
+`⇧⌘I` imports one, always as a **new** notebook, so importing twice can never
+overwrite existing work. API keys and application settings are never included.
+
+## Keyboard shortcuts
+
+| | |
+|---|---|
+| ⇧⌘N | New notebook |
+| ⌘K | Command palette |
+| ⌘1 … ⌘5 | Research · Sources · Notes · Study Tools · Search |
+| ⇧⌘U | Add website |
+| ⇧⌘O | Add files |
+| ⇧⌘E / ⇧⌘I | Export / import notebook |
+| ⇧⌘R | Refresh model lists |
+| ⌘↩ | Ask |
+| ⌘. | Stop generating |
+| ⌘F | Filter notebooks (sidebar) |
+
+## Development
+
+### Building
 
 ```bash
 scripts/build_app.sh release     # assembles build/SourceDesk.app
 open build/SourceDesk.app
 ```
 
-Prebuilt binaries are attached to every run of **Actions → Build and test** on GitHub
-(see `.github/workflows/build.yml`). Move `SourceDesk.app` to `/Applications`, then
-**right-click → Open** the first time: the app is unsigned, so macOS asks once.
-
-## Building
+Prebuilt binaries are attached to tagged releases and to manual **Actions → Build and
+test** runs; ordinary pushes and pull requests run the tests only
+(see `.github/workflows/build.yml`). Move `SourceDesk.app` to `/Applications`, then launch
+it once per the [Download](#download) note above.
 
 ```bash
 git clone https://github.com/Sumi1124/Source-Desk.git
@@ -172,8 +329,9 @@ build the image and attach it to a Release.
 
 There are **no third-party dependencies**. SourceDesk uses SwiftUI, AppKit, PDFKit
 and Network, plus SQLite and zlib, which ship with macOS. Vector search, keyword
-search (SQLite FTS5), HTML extraction, PDF/DOCX/EPUB reading, zip archives and
-SHA-256 are all implemented in the repository, which is why the app builds offline
+search (SQLite FTS5), HTML extraction and readability scoring, DOCX/EPUB/RTF
+parsing, zip archives and SHA-256 are implemented in the repository (PDF text
+extraction goes through Apple's PDFKit), which is why the app builds offline
 and has no supply chain to audit.
 
 ### Testing
@@ -190,146 +348,9 @@ first, because using a stale binary is a real failure mode this project has hit.
 [Testing approach](#testing-approach) for why the tests live in an executable rather
 than `swift test`.
 
-### Setting up a local model
-
-```bash
-brew install ollama          # or download from ollama.com
-ollama serve                 # if it is not already running
-ollama pull llama3.2         # ~2 GB, fast and capable for note-sized questions
-ollama pull nomic-embed-text # optional: better semantic search
-```
-
-Then choose **Ollama** in the toolbar and (optionally) set embeddings to
-*Local model* in Settings → Retrieval.
-
-### Research a topic
-
-Command palette (⌘K) → **Research & Add Sources…**, or the **+** menu in the toolbar.
-Give it a topic and SourceDesk searches the web, downloads the top results and indexes
-them as ordinary sources — downloaded, extracted, cleaned, chunked and embedded, exactly
-like a page you pasted in yourself. **Research & Write a Note…** does the same and then
-writes a summary note from what it found.
-
-Two things it deliberately does *not* do:
-
-- **It never builds a source out of a search snippet.** A snippet is a fragment of a
-  results page, not the author's text, so treating it as the source would mean citing
-  words the source never wrote. Every researched source is the real page or it is
-  reported as a failure.
-- **It never saves an empty source.** If a page cannot be downloaded, or downloads but
-  yields no readable text, it is marked failed with an explanation rather than appearing
-  in the sidebar as a source that cites nothing.
-
-A run over several pages is cancellable, shows progress per page, and keeps whatever it
-already indexed when cancelled.
-
-### Ollama's hosted API
-
-Ollama serves one API from two places: a server on your Mac, and `https://ollama.com`,
-where the same `/api/tags`, `/api/chat` and `/api/embed` routes run models far too
-large for a laptop (the live catalogue currently lists 20, from `gpt-oss:20b` up to
-`glm-5.1`). SourceDesk supports both.
-
-To use it: create a key at [ollama.com/settings/keys](https://ollama.com/settings/keys),
-then Settings → AI Providers → **Ollama Cloud** → *Add API Key*. The key goes in the
-Keychain like every other credential.
-
-Two details worth knowing, both learned from the live endpoint:
-
-- **The catalogue is readable without a key but generation is not.** SourceDesk
-  therefore shows you what exists before you have a key, and tells you plainly that
-  generation needs one — rather than showing an empty list.
-- **Hosted models report no download size.** Their `size` field is the *uncompressed*
-  weight — `glm-5.3` reports 755 GB — so SourceDesk shows the parameter count (read
-  from the model name, since the catalogue leaves `details` blank) and never presents
-  that figure as a download.
-
-Everything else about it is a cloud provider: it requires the per-notebook
-confirmation, it is disabled by Local-Only Mode, it is refused when you are offline,
-and answers from it are labelled as leaving your Mac.
-
-### Cloud providers
-
-Settings → AI Providers stores keys in the **macOS Keychain** — never in the
-notebook, a settings file, a log or an export. Two things worth being clear about:
-
-- A **ChatGPT Plus or Claude Pro subscription is not an API key**. SourceDesk uses
-  the official APIs, which are billed separately by those vendors. The app says this
-  in the UI rather than implying otherwise.
-- Cloud use requires a **per-notebook confirmation** before any source text leaves
-  the Mac, and **Local-Only Mode** disables cloud providers entirely.
-
-## How answers stay grounded
-
-```
-Sources → download/extract → clean → chunk → embed → store (SQLite + FTS5)
-                                                              │
-Question ──► hybrid retrieval (semantic + keyword, fused) ─────┘
-             └─► rerank ─► context assembly ─► model ─► citation validation ─► answer
-```
-
-1. **Retrieval** runs semantic vector search and SQLite FTS5 keyword search in
-   parallel and merges the rankings with reciprocal-rank fusion, so losing either
-   method degrades recall instead of breaking search.
-2. **Reranking** re-scores candidates on term coverage, phrase proximity and heading
-   agreement — in milliseconds, with no model. A model-based reranker is available
-   and falls back to the lexical one if the model is unavailable.
-3. **Context assembly** assigns `[Source N]` / `[Web N]` markers. Markers are
-   assigned in exactly one place, so a citation can never refer to something that was
-   not in the prompt.
-4. **Validation** re-reads the answer, resolves every marker against the material
-   that was actually supplied, and strips any marker that does not resolve. The
-   retrieval trace (chunks, scores, timings) is stored with the message, so the
-   "show your work" panel works even after a restart or an import.
-
-## Privacy
-
-| Scope | What leaves this Mac |
-|---|---|
-| Local model (including a server elsewhere on your own network) | Nothing. Model, embeddings and index all run on hardware you control. |
-| Ollama's hosted API, OpenAI, Anthropic | The retrieved passages and your question, sent to your chosen provider. |
-| Web search | Your search query, sent to your chosen search provider. |
-| Everything else | Nothing. No telemetry, no analytics, no accounts, no update pings. |
-
-Settings → Privacy shows this table live, including which notebooks you have
-approved for cloud use, with a revoke button for each. See
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#privacy-model) for the details.
-
-## Import and export
-
-`⇧⌘E` exports the current notebook to a `.nbk` archive — a plain zip:
-
-```
-My Notebook/
-├── notebook.json        notebook, sources, sessions, notes, chunks
-├── sources/<id>/        content.txt, original files
-├── chats/*.md           readable transcripts
-├── notes/*.md           readable notes
-└── embeddings/*.jsonl   optional vectors, so an import need not re-embed
-```
-
-`⇧⌘I` imports one, always as a **new** notebook, so importing twice can never
-overwrite existing work. API keys and application settings are never included.
-
-## Keyboard shortcuts
-
-| | |
-|---|---|
-| ⌘N | New notebook |
-| ⇧⌘N | New notebook |
-| ⌘K | Command palette |
-| ⌘1 … ⌘5 | Research · Sources · Notes · Study Tools · Search |
-| ⇧⌘U | Add website |
-| ⇧⌘O | Add files |
-| ⇧⌘E / ⇧⌘I | Export / import notebook |
-| ⇧⌘R | Refresh model lists |
-| ⌘↩ | Ask |
-| ⌘. | Stop generating |
-| ⌘F | Filter notebooks (sidebar) |
-
 ## Testing approach
 
-Two things about this project's testing are unusual, and both are deliberate.
+This project's testing is unusual in two ways, both deliberate.
 
 **The tests are an ordinary executable, not `swift test`.** Apple's Command Line
 Tools ship without the XCTest and swift-testing bundles, and without the macro
@@ -363,7 +384,7 @@ NOT VERIFIED (4 — these could not run in this environment):
       no local Ollama model is installed, so grounded answering with a real model is unproven
 ```
 
-`203 verified` is a different claim from `0 failures`, and the distinction is the point:
+`252 verified` is a different claim from `0 failures`:
 most of the pipeline is tested with a stub provider, which says nothing about whether a
 real model, given real retrieved passages, actually answers from them. Suite 20 answers
 that question against **whatever Ollama has installed** — including the

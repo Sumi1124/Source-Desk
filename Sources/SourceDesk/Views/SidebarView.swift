@@ -191,6 +191,7 @@ private struct NotebookRow: View {
                     HStack(spacing: 4) {
                         Text(notebook.title)
                             .font(Design.rowTitle)
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
                         if notebook.isFavorite {
                             Image(systemName: "star.fill")

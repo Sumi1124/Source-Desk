@@ -343,5 +343,5 @@ public enum HTTPClient {
 public enum Networking {
     /// Providers increasingly reject unknown or generic user agents; identifying
     /// honestly keeps the app on the right side of provider terms.
-    public static let userAgent = "SourceDesk/1.0 (macOS; +https://github.com/sourcedesk/sourcedesk)"
+    public static let userAgent = "SourceDesk/1.0 (macOS; +https://github.com/Sumi1124/Source-Desk)"
 }

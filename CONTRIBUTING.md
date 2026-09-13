@@ -12,9 +12,10 @@ swift build            # no dependencies to resolve
 swift run SourceDesk   # launches the app
 ```
 
-**Xcode 15 or later is required to build.** Apple's Command Line Tools alone cannot
-compile SwiftUI's `@Observable` and do not include XCTest, and this project leans on
-Swift 5.9 features. The *tests*, however, run with the Command Line Tools (see below).
+**Xcode is not required.** The Command Line Tools alone build, test and package this
+project — it deliberately avoids macro-based APIs (`@Model`, `@Observable`) for exactly
+that reason. This is verified in CI on a machine with no Xcode, and the tests run through
+this repository's own harness rather than XCTest.
 
 ## Before you open a pull request
 

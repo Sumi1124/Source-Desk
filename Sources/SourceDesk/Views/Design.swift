@@ -71,6 +71,24 @@ enum Design {
         }
     }
 
+    /// Semantic colours for state, as opposed to decoration.
+    ///
+    /// `.green` and `.orange` are vivid in light mode and wash out against white (the pure
+    /// system green measures about 2.7:1 on a white background — below the 4.5:1 floor for
+    /// text, and uncomfortable even for a 6pt dot). These shades hold up in both
+    /// appearances while staying recognisably the same colour.
+    static let statusOnline = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.42, green: 0.88, blue: 0.52, alpha: 1)
+            : NSColor(red: 0.11, green: 0.53, blue: 0.24, alpha: 1)
+    })
+
+    static let statusWarning = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(red: 0.98, green: 0.72, blue: 0.33, alpha: 1)
+            : NSColor(red: 0.66, green: 0.40, blue: 0.03, alpha: 1)
+    })
+
     static func accent(forIndex index: Int) -> Color {
         let palette: [Color] = [.blue, .purple, .teal, .indigo, .pink, .orange]
         return palette[abs(index) % palette.count]

@@ -444,7 +444,7 @@ struct NetworkIndicator: View {
         } label: {
             HStack(spacing: 5) {
                 Circle()
-                    .fill(app.isOnline ? Color.green : Color.orange)
+                    .fill(app.isOnline ? Design.statusOnline : Design.statusWarning)
                     .frame(width: 6, height: 6)
                 Text(app.isOnline ? "Online" : "Offline")
                     .font(Design.caption)

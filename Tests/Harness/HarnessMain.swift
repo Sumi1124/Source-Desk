@@ -69,6 +69,7 @@ struct HarnessMain {
             FindSourcesFlowSuite.suite,
             PresentationSuite.suite,
             OnboardingSuite.suite,
+            DiscoveryPrivacySuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)
