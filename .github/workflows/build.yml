@@ -107,10 +107,20 @@ jobs:
             echo "value=1.0.0" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build the app bundle
+      # The image must run on both architectures, so the packaging job verifies that it
+      # really is universal rather than assuming the build produced one. macos-14 runners
+      # are Intel, so a single-arch build there would leave every Apple Silicon user
+      # unable to launch the download — the failure this check exists to prevent.
+      - name: Build the app bundle (universal)
         run: |
-          swift build -c release
-          ./scripts/build_app.sh release
+          set -o pipefail
+          ./scripts/build_app.sh release | tee /tmp/app.log
+          ARCHS=$(lipo -archs build/SourceDesk.app/Contents/MacOS/SourceDesk)
+          echo "architectures: $ARCHS"
+          if [[ "$ARCHS" != *"arm64"* || "$ARCHS" != *"x86_64"* ]]; then
+            echo "::error::the release build is not universal (got: $ARCHS)"
+            exit 1
+          fi
 
       # The layout step drives Finder, which needs a window server. On a runner that
       # silently does nothing and the image is still built — the script is written to

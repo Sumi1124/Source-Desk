@@ -47,33 +47,66 @@ SourceDesk — installing
 
 1. Drag SourceDesk to the Applications folder.
 
-2. The first time you open it, macOS will refuse because the app is not notarised by
-   Apple (that requires a paid Developer ID, which this project does not have):
+2. The first time you open it, macOS will block it. You do NOT need Terminal, and you do
+   NOT need to install anything. Try these in order:
 
-     "SourceDesk cannot be opened because the developer cannot be verified."
+   a) Right-click (or Control-click) SourceDesk in Applications, choose Open, then click
+      Open again in the dialog. This is the normal step for an app Apple has not notarised.
+      You only do this once.
 
-   To allow it: right-click (or Control-click) the app and choose Open, then confirm.
-   You only do this once.
+   b) If instead you see "SourceDesk is damaged and can't be opened. You should move it to
+      the Trash", that dialog has no Open button — it is Gatekeeper reacting to the
+      download flag rather than to real damage. Clear the flag without Terminal:
 
-   If you prefer the command line:
-     xattr -d com.apple.quarantine /Applications/SourceDesk.app
+        Open System Settings → Privacy & Security.
+        Scroll to the Security section.
+        Find the line about SourceDesk being blocked and click "Open Anyway".
+        Confirm, then launch SourceDesk normally.
 
-3. SourceDesk will ask for nothing at first launch. It runs entirely on your Mac with no
-   account, no telemetry and no network access of its own. Add sources, and configure an
-   AI model when you want one — a local model through Ollama, or a cloud provider with
+      If no such line appears, open Applications, right-click SourceDesk, choose Open, and
+      follow (a). The flag is cleared as soon as the app launches once.
+
+   c) Only if both of those are unavailable, and you have Terminal, this does the same
+      thing in one step:
+
+        xattr -d com.apple.quarantine /Applications/SourceDesk.app
+
+3. Requirements: macOS 14 (Sonoma) or later, on either Apple silicon or Intel. If the app
+   refuses to open with "you do not have permission" or exits immediately, check the
+   architecture note below.
+
+4. SourceDesk asks for no account, no sign-in and no telemetry. It runs on your Mac, with
+   no network access of its own. Add sources, and configure an AI model when you want one:
+   a local model through Ollama (no key, no cost, works offline) or a cloud provider with
    your own API key, which is stored in the macOS Keychain.
 
 Source code, full documentation and the licence: see the project repository.
 TXT
+
+# A volume with this name may already be mounted — from a previous run of this script, or
+# from the user having opened an earlier build. `hdiutil convert` then fails with a bare
+# "Resource temporarily unavailable" that names neither the cause nor the fix, so known
+# stray mounts are detached first.
+if [ -d "/Volumes/$VOLUME_NAME" ]; then
+  hdiutil detach "/Volumes/$VOLUME_NAME" >/dev/null 2>&1 || \
+    hdiutil detach "/Volumes/$VOLUME_NAME" -force >/dev/null 2>&1 || true
+fi
 
 # Build the image. UDZO is compressed and read-only, which is what a download wants; the
 # intermediate UDRW exists only because HFS+ layout is set on a writable image.
 TEMP_DMG="build/SourceDesk-temp.dmg"
 rm -f "$TEMP_DMG" "$DMG"
 
+# The intermediate image needs a name that is not already in use, so it is built with a
+# unique volume name and renamed by `convert` afterwards — where a collision is harmless.
+BUILD_VOLUME="$VOLUME_NAME (building)"
+if [ -d "/Volumes/$BUILD_VOLUME" ]; then
+  hdiutil detach "/Volumes/$BUILD_VOLUME" -force >/dev/null 2>&1 || true
+fi
+
 echo "Creating disk image…"
 hdiutil create \
-  -volname "$VOLUME_NAME" \
+  -volname "$BUILD_VOLUME" \
   -srcfolder "$STAGE" \
   -ov -format UDRW \
   -fs HFS+ \
@@ -83,12 +116,12 @@ hdiutil create \
 # server, so this is best-effort: in a headless CI runner or over SSH it silently does
 # nothing and the image is still perfectly usable, just with default icon positions.
 if [ "${SOURCEDESK_DMG_LAYOUT:-1}" = "1" ] && command -v osascript >/dev/null 2>&1; then
-  MOUNT_POINT="/Volumes/$VOLUME_NAME"
+  MOUNT_POINT="/Volumes/$BUILD_VOLUME"
   if hdiutil attach "$TEMP_DMG" -readwrite -noverify -noautoopen >/dev/null 2>&1; then
     if [ -d "$MOUNT_POINT" ]; then
       osascript <<APPLESCRIPT >/dev/null 2>&1 || true
 tell application "Finder"
-  tell disk "$VOLUME_NAME"
+  tell disk "$BUILD_VOLUME"
     open
     set current view of container window to icon view
     set toolbar visible of container window to false
@@ -152,6 +185,9 @@ ARCHS="${ARCHS:-unknown}"
 echo ""
 echo "Built $DMG ($SIZE, $ARCHS)"
 if [ "$ARCHS" != "unknown" ] && [[ "$ARCHS" != *"x86_64"* ]]; then
-  echo "  note: Apple Silicon only. A universal image needs full Xcode (for xcbuild)."
+  # Be specific about what was produced: a single-architecture image is legitimate, but a
+  # user on the other architecture needs to know before they download it.
+  echo "  note: this image runs on ${ARCHS} only — an Intel Mac will not run it."
+  echo "        Build on a machine with both slices available for a universal image."
 fi
 echo "Open it with: open \"$DMG\""

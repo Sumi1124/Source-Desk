@@ -125,6 +125,14 @@ if hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT" >/dev/null 2>&
   BUILT_HASH=$(shasum -a 256 "$APP/Contents/MacOS/SourceDesk" | cut -d' ' -f1)
   PACKED_HASH=$(shasum -a 256 "$MOUNT/SourceDesk.app/Contents/MacOS/SourceDesk" | cut -d' ' -f1)
   check "the packaged binary matches the built one" test "$BUILT_HASH" = "$PACKED_HASH"
+  # A single-architecture release that silently reaches GitHub is the failure this guards
+  # against: an Intel user downloads it and the app will not launch at all.
+  PACKED_ARCHS=$(lipo -archs "$MOUNT/SourceDesk.app/Contents/MacOS/SourceDesk" 2>/dev/null || echo "unknown")
+  if [[ "$PACKED_ARCHS" == *"arm64"* && "$PACKED_ARCHS" == *"x86_64"* ]]; then
+    ok "the image is a universal binary ($PACKED_ARCHS)"
+  else
+    bad "the image is a universal binary (got: $PACKED_ARCHS — an Intel or Apple silicon Mac could not run it)"
+  fi
   check "the packaged app is signed" signed_adhoc "$MOUNT/SourceDesk.app"
   hdiutil detach "$MOUNT" >/dev/null 2>&1 || hdiutil detach "$MOUNT" -force >/dev/null 2>&1 || true
 else

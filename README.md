@@ -16,14 +16,23 @@ from Google NotebookLM or any other product.
 
 Open the disk image, drag **SourceDesk** into your Applications folder, and launch it.
 
-> **The first launch needs a right-click → Open.** The app is not notarised by Apple —
-> that requires a paid Developer ID, which this project does not have — so macOS shows a
-> "cannot be verified" warning the first time. Right-click (or Control-click) the app,
-> choose **Open**, and confirm. You only do this once. Alternatively:
-> `xattr -d com.apple.quarantine /Applications/SourceDesk.app`
+> **The first launch is blocked by macOS.** The app is not notarised by Apple — that
+> requires a paid Developer ID, which this project does not have. There are two dialogs and
+> they need different answers; neither needs Terminal or anything installed:
+>
+> 1. *"cannot be opened because the developer cannot be verified"* → **right-click (or
+>    Control-click) the app → Open → Open**. Once.
+> 2. *"is damaged and can't be opened. You should move it to the Trash"* → this dialog has
+>    no Open button. Go to **System Settings → Privacy & Security**, scroll to **Security**,
+>    and click **Open Anyway** next to the SourceDesk message. Then launch it normally.
+>
+> If neither line appears in Privacy & Security, right-click → Open works for case 2 as
+> well. The `Read Me First.txt` inside the disk image says the same thing.
+>
+> Only if you prefer a terminal: `xattr -d com.apple.quarantine /Applications/SourceDesk.app`
 
-Requires macOS 14 or later. Universal binaries are not built yet, so the release image
-targets Apple Silicon; Intel Macs should build from source (below).
+Requires macOS 14 (Sonoma) or later, on **Apple silicon or Intel** — the release image is a
+universal binary.
 
 ![SourceDesk](docs/screenshots/01-research.png)
 
@@ -118,10 +127,12 @@ no Homebrew, nothing to install, which keeps a release reproducible on any stock
 is present, runnable and identical to the build it was made from; a broken image fails at
 build time rather than after someone downloads it.
 
-A universal binary (Apple Silicon + Intel) is built automatically **when full Xcode is
-present**, since that needs `xcbuild`. With only the Command Line Tools the build falls
-back to the host architecture, and the script says so. A tagged `v*` push makes GitHub
-Actions build the image and attach it to a Release.
+The release image is a **universal binary**. `swift build --arch arm64 --arch x86_64` needs
+`xcbuild`, which only ships with full Xcode, so when that is unavailable
+`build_app.sh` cross-compiles each architecture separately with `--triple` (which the
+Command Line Tools can do) and fuses the two slices with `lipo`. Either route produces a
+build that runs on both Apple silicon and Intel. A tagged `v*` push makes GitHub Actions
+build the image and attach it to a Release.
 
 There are **no third-party dependencies**. SourceDesk uses SwiftUI, AppKit, PDFKit
 and Network, plus SQLite and zlib, which ship with macOS. Vector search, keyword

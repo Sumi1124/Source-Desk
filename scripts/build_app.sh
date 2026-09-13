@@ -27,29 +27,56 @@ fi
 
 if [ "$SKIP_BUILD" = "0" ]; then
   if [ "$UNIVERSAL" = "auto" ]; then
-    # Try multi-arch first; keep the output quiet unless it succeeds, since the failure
-    # is expected and benign on a Command Line Tools–only machine.
     if xcrun --find xcbuild >/dev/null 2>&1; then
       UNIVERSAL="1"
     else
-      UNIVERSAL="0"
+      # No xcbuild, but cross-compiling each slice does not need it — so try to fuse
+      # rather than giving up on Intel support.
+      UNIVERSAL="fuse"
     fi
   fi
 
   if [ "$UNIVERSAL" = "1" ]; then
     echo "Building ($CONFIG, universal arm64 + x86_64)…"
-    if ! swift build -c "$CONFIG" --arch arm64 --arch x86_64; then
-      echo "  universal build unavailable; building for this Mac's architecture instead."
-      UNIVERSAL="0"
-      swift build -c "$CONFIG"
+    if swift build -c "$CONFIG" --arch arm64 --arch x86_64; then
+      [ -x "$UNIVERSAL_BINARY" ] && BINARY="$UNIVERSAL_BINARY"
+    else
+      echo "  (needs full Xcode; fusing separately-built slices instead)"
+      UNIVERSAL="fuse"
     fi
-  else
-    echo "Building ($CONFIG)…"
-    swift build -c "$CONFIG"
   fi
 
-  if [ "$UNIVERSAL" = "1" ] && [ -x "$UNIVERSAL_BINARY" ]; then
-    BINARY="$UNIVERSAL_BINARY"
+  if [ "$UNIVERSAL" = "fuse" ]; then
+    # `--arch` wants xcbuild, but a cross-compiled slice does not need it: SwiftPM can
+    # build `--triple x86_64-apple-macosx14.0` with the Command Line Tools alone. Building
+    # each slice on its own and fusing with lipo produces the same universal binary, which
+    # is what lets a release run on an Intel Mac without a paid developer setup.
+    ARM_SLICE=".build/release-arm64/SourceDesk"
+    INTEL_SLICE=".build/release-x86_64/SourceDesk"
+    echo "  building arm64 slice…"
+    if swift build -c "$CONFIG" --scratch-path .build/slice-arm64 --triple arm64-apple-macosx14.0 >/dev/null 2>&1; then
+      ARM_SLICE=".build/slice-arm64/$CONFIG/SourceDesk"
+    fi
+    echo "  building x86_64 slice…"
+    if swift build -c "$CONFIG" --scratch-path .build/slice-x86_64 --triple x86_64-apple-macosx14.0 >/dev/null 2>&1; then
+      INTEL_SLICE=".build/slice-x86_64/$CONFIG/SourceDesk"
+    fi
+
+    if [ -x "$ARM_SLICE" ] && [ -x "$INTEL_SLICE" ]; then
+      echo "  fusing slices…"
+      lipo -create "$ARM_SLICE" "$INTEL_SLICE" -output .build/release-universal
+      BINARY=".build/release-universal"
+    else
+      echo "  the second slice could not be built; shipping this Mac's architecture only."
+      echo "  (an Intel Mac will not run this build — see the README)"
+      UNIVERSAL="0"
+      swift build -c "$CONFIG" >/dev/null
+    fi
+  fi
+
+  if [ "$UNIVERSAL" = "0" ]; then
+    echo "Building ($CONFIG)…"
+    swift build -c "$CONFIG"
   fi
 fi
 
