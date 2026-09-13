@@ -215,8 +215,46 @@ enum ScreenshotRenderer {
         )
         try? FileManager.default.removeItem(at: emptyPaths.root)
 
+        // 11. The welcome flow, captured on the seeded library so the model step has real
+        // providers to show. Each step is a separate image because the flow is what a new
+        // user sees first, and it is the part of the app least likely to be re-checked by
+        // hand once it works.
+        for step in 0..<4 {
+            renderOnboardingStep(step, output: output)
+        }
+
         print("Rendered screenshots to \(directory.path)")
         exit(0)
+    }
+
+    /// Renders one step of the welcome flow.
+    ///
+    /// `OnboardingView` reads its starting step from settings, so setting that field before
+    /// the view appears is what puts it on a given step — the same path the app uses when
+    /// resuming a half-finished flow.
+    private static func renderOnboardingStep(_ step: Int, output: (String) -> URL) {
+        let paths = AppPaths(root: FileManager.default.temporaryDirectory
+            .appendingPathComponent("sourcedesk-onboarding-\(UUID().uuidString)", isDirectory: true))
+        let app = AppState(paths: paths)
+        app.start()
+        app.updateSettings {
+            $0.onboardingStepIndex = step
+            $0.storageRootPath = "~/Library/Application Support/SourceDesk/library.sqlite"
+        }
+        let chat = ChatViewModel(app: app)
+        let names = ["welcome", "model", "first-source", "done"]
+
+        render(
+            AnyView(OnboardingView { _ in }
+                .environment(app).environment(chat)),
+            to: output("11-onboarding-\(names[step]).png"),
+            label: "onboarding \(names[step])",
+            // The window title stays "SourceDesk" because the view draws the step name in
+            // its own header; repeating it in the title bar read as a rendering bug.
+            title: "SourceDesk",
+            size: NSSize(width: Design.onboardingWidth, height: Design.onboardingHeight)
+        )
+        try? FileManager.default.removeItem(at: paths.root)
     }
 
     /// The application's real root view, hosted as the window's content.

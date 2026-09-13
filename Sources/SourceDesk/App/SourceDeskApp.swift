@@ -113,6 +113,12 @@ struct SourceDeskCommands: Commands {
             .keyboardShortcut("i", modifiers: [.command, .shift])
         }
 
+        CommandGroup(replacing: .help) {
+            Button("SourceDesk Help…") { app.reopenOnboarding() }
+            Divider()
+            Link("SourceDesk on GitHub", destination: URL(string: "https://github.com/Sumi1124/Source-Desk")!)
+        }
+
         CommandMenu("Notebook") {
             Button("Add Website…") { NotificationCenter.default.post(name: .addWebsite, object: nil) }
                 .keyboardShortcut("u", modifiers: [.command, .shift])

@@ -26,6 +26,12 @@ public final class AppState {
     var notes: [NotebookNote] = []
 
     var selectedNotebookID: RecordID?
+
+    /// True while the welcome flow is on screen. Presented as a sheet from the root view.
+    var onboardingVisible = false
+    /// Set once a first run has been handled, so the sheet is not re-presented if the
+    /// user closes and reopens the main window in the same session.
+    private var onboardingDecisionMade = false
     var selectedSourceID: RecordID?
     var selectedSessionID: RecordID?
     var selectedNoteID: RecordID?
@@ -149,11 +155,76 @@ public final class AppState {
             if selectedNotebookID == nil, let first = notebooks.first {
                 selectNotebook(first.id)
             }
+            presentOnboardingIfNeeded(settingsStore: settingsStore)
         } catch let error as SourceDeskError {
             lastError = PresentedError(error)
         } catch {
             lastError = PresentedError(title: "Couldn't open your library", message: error.localizedDescription)
         }
+    }
+
+    /// Decides once, at launch, whether to offer the welcome flow.
+    ///
+    /// The test is "has a settings blob ever been written", not "is the library empty":
+    /// a long-time user who deletes every notebook has not asked to be onboarded again.
+    /// An explicit dismiss is also remembered in `hasCompletedOnboarding`.
+    private func presentOnboardingIfNeeded(settingsStore: SettingsStore) {
+        guard !onboardingDecisionMade else { return }
+        onboardingDecisionMade = true
+        // The policy itself is in the core, where it is testable without a window.
+        let suppressed = ProcessInfo.processInfo.environment["SOURCEDESK_SUPPRESS_ONBOARDING"] == "1"
+        switch OnboardingPolicy.launchDecision(
+            settings: settings,
+            hasSavedSettings: settingsStore.hasSavedSettings,
+            suppressed: suppressed
+        ) {
+        case .present:
+            DiagnosticsLog.shared.info("First run — offering the welcome flow", category: "onboarding")
+            onboardingVisible = true
+        case .suppressAndRecordSeen:
+            // Settings exist, so this is not a first run. Record the decision so the check
+            // is not repeated on every launch.
+            updateSettings { $0.hasCompletedOnboarding = true }
+        case .suppress:
+            DiagnosticsLog.shared.info(
+                "Welcome flow suppressed (completed=\(settings.hasCompletedOnboarding), suppressed=\(suppressed))",
+                category: "onboarding"
+            )
+        }
+    }
+
+    /// Applies what the user chose in the welcome flow. Called from the closing sheet.
+    func completeOnboarding(createStarterNotebook: Bool, model: String?, providerID: String?) {
+        updateSettings {
+            $0.hasCompletedOnboarding = true
+            $0.onboardingStepIndex = 0
+            if let model, let providerID {
+                $0.modelSelection[providerID] = model
+                $0.preferredProviderID = providerID
+                $0.onboardingSelectedModel = model
+            }
+        }
+
+        if OnboardingPolicy.shouldCreateStarterNotebook(
+            requested: createStarterNotebook,
+            existingNotebookCount: notebooks.count
+        ) {
+            let title = OnboardingPolicy.starterNotebookTitle
+            if let notebook = createNotebook(title: title, summary: OnboardingPolicy.starterNotebookSummary) {
+                DiagnosticsLog.shared.info("Created starter notebook", category: "onboarding")
+                // Land the user in Sources, because adding a source is the next thing that
+                // has to happen for the notebook to be worth anything.
+                section = .sources
+                _ = notebook
+            }
+        }
+        onboardingVisible = false
+    }
+
+    /// Reopens the flow from the Help menu, for a user who wants a refresher.
+    func reopenOnboarding() {
+        updateSettings { $0.onboardingStepIndex = 0 }
+        onboardingVisible = true
     }
 
     private func makeProviders() -> ProviderRegistry {

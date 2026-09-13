@@ -32,6 +32,15 @@ enum Design {
     static let sectionTitle = Font.system(size: 13, weight: .semibold)
     static let rowTitle = Font.system(size: 13)
     static let caption = Font.system(size: 11)
+
+    // MARK: Onboarding
+
+    /// Fixed size for the welcome flow. A form that resizes under the user as they move
+    /// between steps is disorienting, and every step fits comfortably at this size.
+    static let onboardingWidth: CGFloat = 620
+    static let onboardingHeight: CGFloat = 560
+    /// Measure that keeps body text readable rather than full-bleed across the sheet.
+    static let onboardingContentWidth: CGFloat = 500
     static let monoCaption = Font.system(size: 11, design: .monospaced)
     static let answerBody = Font.system(size: 14)
 

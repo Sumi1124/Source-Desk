@@ -75,6 +75,19 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var showSourceWordCounts: Bool
     public var chatFontSize: Double
 
+    // MARK: First run
+
+    /// False until the user has completed or dismissed the welcome flow.
+    ///
+    /// Stored rather than inferred from "is the library empty", because a user who deletes
+    /// every notebook has not asked to see onboarding again.
+    public var hasCompletedOnboarding: Bool
+    /// The step the welcome flow was left on, so re-opening it resumes rather than restarts.
+    public var onboardingStepIndex: Int
+    /// The local model the welcome flow chose, if any. Recorded so the flow's summary can
+    /// state what actually happened rather than re-deriving it.
+    public var onboardingSelectedModel: String
+
     // MARK: Advanced
 
     public var logLevel: LogLevel
@@ -129,6 +142,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showInspector = true
         showSourceWordCounts = true
         chatFontSize = 13
+
+        hasCompletedOnboarding = false
+        onboardingStepIndex = 0
+        onboardingSelectedModel = ""
         logLevel = .error
         requestTimeoutSeconds = 120
         maximumConcurrentIngestions = 3
@@ -269,6 +286,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showSourceWordCounts = decode(.showSourceWordCounts, showSourceWordCounts)
         chatFontSize = decode(.chatFontSize, chatFontSize)
 
+        // Absent in settings written before the welcome flow existed. Note that a missing
+        // hasCompletedOnboarding decodes to false, which would replay onboarding for an
+        // existing user — so the caller treats "settings file exists at all" as having
+        // seen the app, and only a genuinely first run has no file.
+        hasCompletedOnboarding = decode(.hasCompletedOnboarding, hasCompletedOnboarding)
+        onboardingStepIndex = decode(.onboardingStepIndex, onboardingStepIndex)
+        onboardingSelectedModel = decode(.onboardingSelectedModel, onboardingSelectedModel)
+
         if let level = try? container.decode(LogLevel.self, forKey: .logLevel) { logLevel = level }
         requestTimeoutSeconds = decode(.requestTimeoutSeconds, requestTimeoutSeconds)
         maximumConcurrentIngestions = decode(.maximumConcurrentIngestions, maximumConcurrentIngestions)
@@ -302,6 +327,15 @@ public struct SettingsStore: Sendable {
 
     public init(store: NotebookStore) {
         self.store = store
+    }
+
+    /// True when a settings blob has ever been saved — i.e. the app has run before.
+    ///
+    /// Distinct from "the library has no notebooks", which is a state a long-time user can
+    /// reach deliberately. Only used to decide whether to offer the welcome flow.
+    public var hasSavedSettings: Bool {
+        if let value = try? store.settingValue(Self.key) { return !value.isEmpty }
+        return false
     }
 
     public func load() -> AppSettings {

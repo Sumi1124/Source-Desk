@@ -65,6 +65,16 @@ struct RootView: View {
         .sheet(isPresented: cloudConsentBinding) {
             CloudConsentSheet()
         }
+        .sheet(isPresented: $app.onboardingVisible) {
+            OnboardingView { outcome in
+                app.completeOnboarding(
+                    createStarterNotebook: outcome.createStarterNotebook,
+                    model: outcome.selectedModel,
+                    providerID: outcome.selectedProviderID
+                )
+            }
+            .interactiveDismissDisabled(false)
+        }
         // Research lives here rather than in the command palette, which is dismissed as
         // soon as its command runs.
         .sheet(item: $app.researchRequest) { request in

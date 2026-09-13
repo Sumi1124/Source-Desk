@@ -68,6 +68,7 @@ struct HarnessMain {
             DuckDuckGoAPISuite.suite,
             FindSourcesFlowSuite.suite,
             PresentationSuite.suite,
+            OnboardingSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)
