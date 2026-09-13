@@ -150,6 +150,8 @@ struct SourceInspector: View {
                             .font(Design.monoCaption)
                             .lineLimit(2)
                             .truncationMode(.middle)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 if let site = source.siteName, source.url == nil {
@@ -196,7 +198,10 @@ struct SourceInspector: View {
                 if let published = source.publishedAt {
                     DetailRow(label: "Published", value: Format.shortDate(published))
                 }
-                DetailRow(label: "Checked", value: Format.relative(source.updatedAt))
+                // Absolute, like every other row here. A relative time in a list of dates
+                // reads as a different kind of fact, and it changes on every render, which
+                // made the screenshots impossible to compare run to run.
+                DetailRow(label: "Updated", value: Format.shortDate(source.updatedAt))
             }
 
             // Privacy

@@ -139,11 +139,13 @@ public enum DemoSeed {
             print("  source: \(document.title) — \(Format.count(chunks.count, "passage"))")
         }
 
-        // A failed source, so the error handling is visible in the UI.
+        // A failed source, so the error handling is visible in the UI. Its title is written
+        // the way a real one would be — a page that fails still had a name, and repeating the
+        // URL as the title made the row look like a bug rather than a state.
         _ = try store.upsert(source: Source(
             notebookID: primary.id,
             kind: .website,
-            title: "https://www.example.com/paywalled-analysis",
+            title: "Analysis: regional inspection capacity (subscriber access)",
             url: "https://www.example.com/paywalled-analysis",
             status: .failed,
             errorMessage: "The page is behind a subscription paywall.",
