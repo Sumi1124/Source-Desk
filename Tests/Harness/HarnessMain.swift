@@ -70,6 +70,7 @@ struct HarnessMain {
             PresentationSuite.suite,
             OnboardingSuite.suite,
             DiscoveryPrivacySuite.suite,
+            ReliabilitySuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)

@@ -210,7 +210,12 @@ Question ──► hybrid retrieval (semantic + keyword, fused) ─────�
    parallel and merges the rankings with reciprocal-rank fusion, so losing either
    method degrades recall instead of breaking search.
 
-   A caveat about "semantic" here: the default embedder is built in and **lexical** —
+   Verified at scale: suite 29 ingests 900 passages across 60 sources into a real library
+and asserts nothing is lost or duplicated, that retrieval stays bounded, that a degenerate
+query is handled, and that re-adding a page folds into the existing source rather than
+doubling the corpus.
+
+A caveat about "semantic" here: the default embedder is built in and **lexical** —
    hashed word, bigram and character 4-gram vectors — chosen so the app works with no
    download and no network. It matches wording well and paraphrases poorly. Point
    embeddings at `nomic-embed-text` (or an OpenAI embedding model) in Settings →
@@ -377,14 +382,14 @@ export → import → answer again).
 real model or a live network skip with a reason, and the summary prints them separately:
 
 ```
-PASS  26 suites · 249 tests · 1386 assertions · 0 failures · 245 verified
+PASS  28 suites · 262 tests · 1421 assertions · 0 failures · 258 verified
 
 NOT VERIFIED (4 — these could not run in this environment):
   ~ 20 · Live local model → a real model answers from the sources and cites them
       no local Ollama model is installed, so grounded answering with a real model is unproven
 ```
 
-`252 verified` is a different claim from `0 failures`:
+`258 verified` is a different claim from `0 failures`:
 most of the pipeline is tested with a stub provider, which says nothing about whether a
 real model, given real retrieved passages, actually answers from them. Suite 20 answers
 that question against **whatever Ollama has installed** — including the
