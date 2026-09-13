@@ -117,8 +117,9 @@ because they *are* the interface.
 ## Requirements
 
 - macOS 14 Sonoma or later
-- **Xcode 15 or later to build** (the SwiftData/Observation macro plugins ship with
-  Xcode, not the Command Line Tools — see [Building](#building))
+- To build: the **Command Line Tools** (`xcode-select --install`) and Swift 5.10+.
+  Full Xcode is **not** required — this project deliberately avoids macros and any
+  API that needs it, so `swift build` works with the Command Line Tools alone.
 - Optional: [Ollama](https://ollama.com) for local models
 - Optional: API keys for OpenAI, Anthropic, and/or a search provider
 
@@ -178,23 +179,16 @@ and has no supply chain to audit.
 ### Testing
 
 ```bash
-swift run SourceDeskHarness            # all suites: ~152 tests, ~990 assertions
-swift run SourceDeskHarness -f "6 ·"   # one suite
+scripts/test.sh                        # all suites
+scripts/test.sh -f "6 ·"               # one suite or test
+scripts/test.sh --release              # also verify the app bundle and the disk image
 SOURCEDESK_LIVE_WEB=1 scripts/test.sh  # also exercise the public internet
 ```
 
-`scripts/test.sh` is the CI gate and exits non-zero on failure. See
-[Testing](#testing-approach) for why the tests live in an executable rather than
-`swift test`.
-
-## First run
-
-1. **Create a notebook** (⇧⌘N) and add sources: ⇧⌘U for a website, ⇧⌘O for files,
-   or drop files onto the window. Folders are scanned recursively.
-2. **Ask a question** in the Research tab. With no model configured, SourceDesk
-   says so and tells you what to do rather than failing silently.
-3. **Pick a model** from the toolbar picker. If Ollama is installed, your models
-   appear automatically; SourceDesk never downloads one for you.
+`scripts/test.sh` is the CI gate and exits non-zero on failure. It builds the harness
+first, because using a stale binary is a real failure mode this project has hit. See
+[Testing approach](#testing-approach) for why the tests live in an executable rather
+than `swift test`.
 
 ### Setting up a local model
 
@@ -362,7 +356,7 @@ export → import → answer again).
 real model or a live network skip with a reason, and the summary prints them separately:
 
 ```
-PASS  20 suites · 207 tests · 1228 assertions · 0 failures · 203 verified
+PASS  26 suites · 249 tests · 1386 assertions · 0 failures · 245 verified
 
 NOT VERIFIED (4 — these could not run in this environment):
   ~ 20 · Live local model → a real model answers from the sources and cites them
@@ -384,9 +378,17 @@ that would fail the moment a model appeared.
 **Packaging is tested too.** `scripts/test.sh --release` builds the bundle and the disk
 image and then inspects them: that the Info.plist parses and declares what a Mac app
 needs, that the app requests no camera/microphone/location entitlements, that the image
-mounts, that the packaged binary is byte-identical to the build it came from, and that the
-image carries the read-me explaining the first-launch step. A packaging step is otherwise
-only exercised on release day, which is the worst time to find out it broke.
+mounts, that the packaged binary is byte-identical to the build it came from, that the
+image carries the read-me explaining the first-launch step, and that the release is a
+universal binary rather than Apple-silicon only. A packaging step is otherwise only
+exercised on release day, which is the worst time to find out it broke.
+
+**Accessibility is tested against the running window.** `SourceDesk --audit-accessibility`
+walks the real window through the Accessibility API and fails if any control the app owns
+has no accessible name. This is not something source review can answer: an icon-only button
+with a tooltip looks labelled and announces nothing, because `.help()` is not an
+accessibility label. It found exactly that — the toolbar's section picker read out
+`bubble.left.and.text.bubble.right` instead of "Research".
 
 ## Project layout
 

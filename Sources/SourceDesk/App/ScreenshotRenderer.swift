@@ -52,8 +52,12 @@ enum ScreenshotRenderer {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         // A scratch library, seeded if it is empty, so screenshots always show content.
-        let root = ProcessInfo.processInfo.environment["SOURCEDESK_SCREENSHOT_ROOT"]
-            ?? "/tmp/sd-demo/Library/Application Support/SourceDesk"
+        //
+        // The path is fixed rather than derived from the output directory on purpose: the
+        // Privacy panel prints the library location, so a per-run path would make every
+        // capture byte-different from the last and defeat the staleness check.
+        let root = ProcessInfo.processInfo.environment["SOURCEDESK_SEED_ROOT"]
+            ?? "/tmp/sd-screenshot-library"
         let paths = AppPaths(root: URL(fileURLWithPath: root))
         try? paths.createDirectories()
 

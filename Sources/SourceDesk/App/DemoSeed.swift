@@ -22,16 +22,22 @@ public enum DemoSeed {
 
         print("Seeding library at \(paths.root.path)")
 
+        // Relative ages are fixed rather than random: these values are screenshotted, and a
+        // random spread produced a different "added" age on every run.
+        let demoNow = Date(timeIntervalSince1970: 1_787_000_000)
+
         // Two notebooks, so the sidebar shows structure.
         let primary = try store.upsert(notebook: Notebook(
             title: "Industrial Decline",
             summary: "Why inspection throughput fell across the seven regions",
-            lastOpenedAt: Date(),
+            lastOpenedAt: demoNow,
             isFavorite: true
         ))
         let secondary = try store.upsert(notebook: Notebook(
             title: "Reading Notes: Regulatory Reform",
             summary: "Background reading for the reform chapter",
+            createdAt: demoNow,
+            updatedAt: demoNow,
             accentIndex: 2
         ))
 
@@ -90,7 +96,11 @@ public enum DemoSeed {
              """),
         ]
 
+        var documentIndex = 0
+
         for document in documents {
+            documentIndex += 1
+            let addedAt = demoNow.addingTimeInterval(-Double(documentIndex) * 86_400)
             var source = try store.upsert(source: Source(
                 notebookID: document.notebook.id,
                 kind: document.kind,
@@ -99,7 +109,7 @@ public enum DemoSeed {
                 wordCount: TextMath.wordCount(document.text),
                 pageCount: document.kind == .pdf ? 14 : nil,
                 status: .ready,
-                addedAt: Date().addingTimeInterval(-Double.random(in: 3_600...400_000)),
+                addedAt: addedAt,
                 extractionMethod: document.kind == .website ? "readability" : (document.kind == .pdf ? "pdfkit" : "plain text"),
                 fetchMilliseconds: document.kind == .website ? 412 : nil
             ))
@@ -151,7 +161,7 @@ public enum DemoSeed {
         try store.upsert(message: ChatMessage(
             sessionID: session.id, notebookID: primary.id, role: .user,
             content: "What caused the decline in inspection throughput?",
-            createdAt: Date().addingTimeInterval(-300)
+            createdAt: demoNow.addingTimeInterval(-300)
         ))
 
         let sources = try store.sources(notebookID: primary.id)
@@ -196,7 +206,7 @@ public enum DemoSeed {
 
                     Independent analysts quoted alongside the official account argue the decline began earlier than March, when the reorganisation was announced rather than implemented. The sources disagree on timing, not on cause.
                     """,
-                    createdAt: Date().addingTimeInterval(-280),
+                    createdAt: demoNow.addingTimeInterval(-280),
                     citations: citations,
                     retrieval: RetrievalTrace(
                         query: "What caused the decline in inspection throughput?",

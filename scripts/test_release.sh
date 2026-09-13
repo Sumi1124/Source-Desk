@@ -161,6 +161,67 @@ check "build output is ignored" git check-ignore -q build/SourceDesk.app
 # Accessibility is checked against the running window, not the source. An icon-only control
 # with a tooltip but no label looks correct in review and is silent to VoiceOver, so the
 # only honest test is to ask AppKit what it exposes.
+# The screenshots are the project's shopfront, and they silently drifted once already: the
+# renderer produced dark-mode images where the README promised light ones, and the window
+# chrome the README advertises was absent. Both are invisible in a diff and obvious to a
+# visitor, so they are checked mechanically.
+echo ""
+echo "Screenshots"
+SHOT_DIR=/tmp/sourcedesk-shots-check
+rm -rf "$SHOT_DIR"
+if SOURCEDESK_SCREENSHOT_ROOT="$SHOT_DIR" ./.build/release/SourceDesk --render-screenshots "$SHOT_DIR" >/dev/null 2>&1 \
+   && SOURCEDESK_SCREENSHOT_ROOT="$SHOT_DIR" ./.build/release/SourceDesk --render-screenshots "$SHOT_DIR" --dark >/dev/null 2>&1; then
+  ok "the renderer completes without crashing, light and dark"
+else
+  bad "the renderer runs to completion, light and dark"
+fi
+
+light_count=$(ls "$SHOT_DIR"/*.png 2>/dev/null | grep -vc -- '-dark\.png$' || true)
+dark_count=$(ls "$SHOT_DIR"/*.png 2>/dev/null | grep -c -- '-dark\.png$' || true)
+if [ "$light_count" -gt 0 ] && [ "$dark_count" -ge "$light_count" ]; then
+  ok "both light and dark variants are produced ($light_count light, $dark_count dark)"
+else
+  bad "both light and dark variants are produced (got $light_count light, $dark_count dark)"
+fi
+
+# Every committed screenshot must match what the renderer currently produces, or the README
+# is advertising a build that no longer exists.
+#
+# Compared per-pixel rather than by hash: a hash reports drift on every single run because
+# the captures legitimately contain a relative timestamp, and a check that always fails gets
+# ignored. Pixels are what a visitor sees.
+stale=0
+missing=0
+for f in "$SHOT_DIR"/*.png; do
+  b=$(basename "$f")
+  if [ -f "docs/screenshots/$b" ]; then
+    if ! swift scripts/pixel_diff.swift "$f" "docs/screenshots/$b" 0.5 >/dev/null 2>&1; then
+      stale=$((stale+1)); echo "     changed: $b"
+    fi
+  else
+    missing=$((missing+1)); echo "     not committed: $b"
+  fi
+done
+if [ "$stale" -eq 0 ] && [ "$missing" -eq 0 ]; then
+  ok "the committed screenshots match what the renderer produces"
+else
+  bad "$stale screenshot(s) differ and $missing are missing — run scripts/screenshots.sh"
+fi
+
+# The window chrome is the difference between "a Mac app" and "a web page in a frame".
+# A title bar is 28pt; a window with a toolbar reserves roughly 52pt more. Assert the
+# capture is taller than its content view, which is only true when chrome is present.
+img_size() { sips -g pixelWidth -g pixelHeight "$1" 2>/dev/null | awk '/pixelWidth/{w=$2} /pixelHeight/{h=$2} END{print w"x"h}'; }
+main_shot="$SHOT_DIR/01-research.png"
+if [ -f "$main_shot" ]; then
+  h=$(sips -g pixelHeight "$main_shot" 2>/dev/null | awk '/pixelHeight/{print $2}')
+  if [ "${h:-0}" -ge 1700 ]; then
+    ok "the main window capture includes its title bar (height ${h}px)"
+  else
+    bad "the main window capture includes its title bar (height ${h}px is content-only)"
+  fi
+fi
+
 echo ""
 echo "Auditing the accessibility tree…"
 if ./.build/debug/SourceDesk --audit-accessibility > /tmp/sourcedesk-a11y.txt 2>&1; then
