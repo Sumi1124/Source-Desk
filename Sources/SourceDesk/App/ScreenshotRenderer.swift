@@ -86,7 +86,27 @@ enum ScreenshotRenderer {
         let search = SearchPanelViewModel(app: app)
 
         if let notebook = app.notebooks.first(where: { $0.isFavorite }) ?? app.notebooks.first {
+            // Selecting a notebook stamps `last_opened_at` with the wall clock and the
+            // upsert path rewrites the accent index, which would make the sidebar's
+            // relative age and accent bar drift between renders. Both are written back
+            // to the seeded value afterwards, so a capture shows the demo library as
+            // seeded rather than as of the moment this process happened to run.
             app.selectNotebook(notebook.id)
+            if let store = app.store {
+                _ = try? store.upsert(notebook: Notebook(
+                    id: notebook.id,
+                    title: notebook.title,
+                    summary: notebook.summary,
+                    createdAt: notebook.createdAt,
+                    updatedAt: notebook.updatedAt,
+                    lastOpenedAt: DemoSeed.demoNow,
+                    isFavorite: notebook.isFavorite,
+                    isArchived: notebook.isArchived,
+                    defaultScope: notebook.defaultScope,
+                    accentIndex: notebook.accentIndex
+                ))
+            }
+            app.reloadNotebooks()
             chat.loadMessages()
             if let source = app.sources.first(where: { $0.title.contains("Inspectorate") }) ?? app.sources.first {
                 app.selectedSourceID = source.id

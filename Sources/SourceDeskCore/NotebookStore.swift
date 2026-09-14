@@ -110,13 +110,17 @@ public final class NotebookStore: @unchecked Sendable {
         }
     }
 
-    public func touchNotebook(id: RecordID, opened: Bool = false) throws {
-        let now = Date()
+    public func touchNotebook(id: RecordID, opened: Bool = false, at now: Date? = nil) throws {
+        // `now` exists for the screenshot renderer: it must be able to write back the
+        // demo library's seeded timestamp after selecting a notebook, because a real
+        // `Date()` there would make the sidebar's relative age drift between renders.
+        // Nil in normal use, which keeps the live app stamping the real clock.
+        let timestamp = now ?? Date()
         if opened {
             try db.execute("UPDATE notebooks SET updated_at = ?, last_opened_at = ? WHERE id = ?;",
-                           [.date(now), .date(now), .text(id)])
+                           [.date(timestamp), .date(timestamp), .text(id)])
         } else {
-            try db.execute("UPDATE notebooks SET updated_at = ? WHERE id = ?;", [.date(now), .text(id)])
+            try db.execute("UPDATE notebooks SET updated_at = ? WHERE id = ?;", [.date(timestamp), .text(id)])
         }
     }
 
