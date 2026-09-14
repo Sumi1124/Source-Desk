@@ -526,8 +526,8 @@ public final class NotebookStore: @unchecked Sendable {
 
     public func clearCache() throws -> Int64 {
         let size = FileStore.totalSize(of: paths.cacheRoot)
-        try? FileManager.default.removeItem(at: paths.cacheRoot)
-        try? FileManager.default.createDirectory(at: paths.cacheRoot, withIntermediateDirectories: true)
+        _ = try? FileManager.default.removeItem(at: paths.cacheRoot)
+        _ = try? FileManager.default.createDirectory(at: paths.cacheRoot, withIntermediateDirectories: true)
         return size
     }
 

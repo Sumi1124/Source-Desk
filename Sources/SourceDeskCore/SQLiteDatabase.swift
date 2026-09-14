@@ -128,7 +128,7 @@ public final class SQLiteDatabase: @unchecked Sendable {
             try execute("COMMIT;")
             return result
         } catch {
-            try? execute("ROLLBACK;")
+            _ = try? execute("ROLLBACK;")
             throw error
         }
     }

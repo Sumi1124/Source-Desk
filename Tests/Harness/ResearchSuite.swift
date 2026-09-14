@@ -39,7 +39,7 @@ enum ResearchSuite {
                 // The whole feature in one assertion: the search result must turn into a
                 // source whose content is downloaded, stored and chunked — not a row
                 // built from the search snippet.
-                let (store, paths) = try Fixtures.temporaryStore()
+                let (store, _) = try Fixtures.temporaryStore()
                 let notebook = try Fixtures.makeNotebook(store, title: "Research Target")
                 let server = LocalHTTPServer { request in
                     if request.path == "/robots.txt" { return .text("User-agent: *\nAllow: /\n") }

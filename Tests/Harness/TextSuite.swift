@@ -24,6 +24,28 @@ enum TextSuite {
                 try ctx.check(mixed.contains("報告") && mixed.contains("decline"), "CJK runs stay intact: \(mixed)")
             },
 
+            test("relative dates honour the pinned reference clock") { ctx in
+                // The screenshot renderer pins Format.referenceNow to the demo instant so
+                // "3 hours ago" cannot become "4 hours ago" as real time passes. The pin
+                // must actually change the output: without it, the staleness check failed
+                // even though nothing in the interface had changed.
+                let demoNow = Date(timeIntervalSince1970: 1_787_000_000)
+                let threeHoursEarlier = demoNow.addingTimeInterval(-3 * 3600)
+
+                Format.referenceNow = nil
+                let liveClock = Format.relative(threeHoursEarlier)
+                Format.referenceNow = demoNow
+                let pinned = Format.relative(threeHoursEarlier)
+                Format.referenceNow = nil
+
+                try ctx.check(pinned != liveClock,
+                              "pinning the clock must change the rendered relative age")
+                // With the pin, the age is deterministic: "3 hours ago" relative to the
+                // demo instant, no matter when the renderer runs.
+                try ctx.equal(pinned, "3 hours ago",
+                              "a date three hours before the pin must render as '3 hours ago'")
+            },
+
             test("stemming makes plurals and gerunds collide") { ctx in
                 try ctx.equal(TextMath.stem("declining"), "declin")
                 try ctx.equal(TextMath.stem("declines"), "declin")

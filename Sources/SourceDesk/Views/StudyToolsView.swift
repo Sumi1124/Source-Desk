@@ -70,7 +70,7 @@ struct StudyToolsView: View {
 
     private var toolPicker: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Tools")
+            Text(L("Tools"))
                 .font(Design.sectionTitle)
                 .padding(.horizontal, Design.spacingSmall)
                 .padding(.top, Design.spacingSmall)
@@ -111,18 +111,18 @@ struct StudyToolsView: View {
 
     private func explanation(for tool: NoteKind) -> String {
         switch tool {
-        case .summary: return "An overview, the main points, and what the material leaves unsettled."
-        case .keyPoints: return "Eight to twelve specific, checkable points, ordered by importance."
-        case .flashcards: return "Question-and-answer cards you can step through here."
-        case .quiz: return "Multiple-choice questions with answers, explanations and scoring."
-        case .studyGuide: return "Concepts, how they connect, and questions to test yourself."
-        case .outline: return "A hierarchical outline following the material's own structure."
-        case .faq: return "Questions a careful reader would ask, with direct answers."
-        case .timeline: return "A chronological list drawn from dates in the material."
-        case .quotations: return "Verbatim excerpts, with why each matters."
-        case .comparison: return "Where two or more sources agree, disagree, and what each adds."
-        case .briefing: return "The important points, context, and what remains uncertain."
-        case .manual: return "Free-form notes from the selected material."
+        case .summary: return L("An overview, the main points, and what the material leaves unsettled.")
+        case .keyPoints: return L("Eight to twelve specific, checkable points, ordered by importance.")
+        case .flashcards: return L("Question-and-answer cards you can step through here.")
+        case .quiz: return L("Multiple-choice questions with answers, explanations and scoring.")
+        case .studyGuide: return L("Concepts, how they connect, and questions to test yourself.")
+        case .outline: return L("A hierarchical outline following the material's own structure.")
+        case .faq: return L("Questions a careful reader would ask, with direct answers.")
+        case .timeline: return L("A chronological list drawn from dates in the material.")
+        case .quotations: return L("Verbatim excerpts, with why each matters.")
+        case .comparison: return L("Where two or more sources agree, disagree, and what each adds.")
+        case .briefing: return L("The important points, context, and what remains uncertain.")
+        case .manual: return L("Free-form notes from the selected material.")
         }
     }
 
@@ -131,7 +131,7 @@ struct StudyToolsView: View {
     private var materialBar: some View {
         HStack(spacing: Design.spacingSmall) {
             if app.sources.isEmpty {
-                Text("No sources in this notebook")
+                Text(L("No sources in this notebook"))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -172,13 +172,13 @@ struct StudyToolsView: View {
             Spacer()
 
             if study.isGenerating {
-                Button("Stop") { study.cancel() }
+                Button(L("Stop")) { study.cancel() }
                     .controlSize(.small)
             } else {
                 Button {
                     study.generate()
                 } label: {
-                    Label("Generate", systemImage: "sparkles")
+                    Label(L("Generate"), systemImage: "sparkles")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -208,7 +208,7 @@ struct StudyToolsView: View {
                         .foregroundStyle(.secondary)
                 }
                 if study.streamingText.isEmpty {
-                    Text("Preparing material from your sources…")
+                    Text(L("Preparing material from your sources…"))
                         .font(Design.caption)
                         .foregroundStyle(.tertiary)
                 } else {
@@ -259,22 +259,22 @@ struct StudyToolsView: View {
                 MarkdownAnswer(text: note.body, citations: [])
 
                 HStack(spacing: Design.spacingSmall) {
-                    Button("Open in Notes") {
+                    Button(L("Open in Notes")) {
                         app.selectedNoteID = note.id
                         app.section = .notes
                     }
-                    Button("Copy") {
+                    Button(L("Copy")) {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(note.body, forType: .string)
                         app.statusMessage = "Copied to the clipboard"
                     }
                     if let url = exportURL(note) {
-                        Button("Export as Markdown…") {
+                        Button(L("Export as Markdown…")) {
                             let panel = NSSavePanel()
                             panel.nameFieldStringValue = "\(NotebookArchive.sanitize(note.title)).md"
                             panel.allowedContentTypes = [.plainText]
                             guard panel.runModal() == .OK, let target = panel.url else { return }
-                            try? FileStore.write(note.body, to: target)
+                            _ = try? FileStore.write(note.body, to: target)
                         }
                         .help("Save a copy at \(url.path)")
                     }
@@ -318,7 +318,7 @@ struct SearchPanelView: View {
                 if search.isSearching {
                     ProgressView().controlSize(.small)
                 } else {
-                    Button("Search") { search.search() }
+                    Button(L("Search")) { search.search() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         .disabled(search.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

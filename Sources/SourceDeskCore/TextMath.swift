@@ -188,6 +188,15 @@ public enum StableHash {
 /// functions, and because the test harness only links the core — text that could not be
 /// tested is how "1 passages" and "Zero KB of text" reached a release screenshot.
 public enum Format {
+    /// The instant `relative` treats as "now", when set.
+    ///
+    /// The demo library pins its content to one fixed instant so screenshots cannot drift
+    /// between runs, but `RelativeDateTimeFormatter` renders against the live wall clock,
+    /// so "3 hours ago" still became "4 hours ago" as real time passed. The renderer sets
+    /// this to the demo instant, so a relative age is as stable as the data behind it.
+    /// Nil in normal use: the app always wants the real clock.
+    public static var referenceNow: Date?
+
     /// A human-readable size.
     ///
     /// `ByteCountFormatter` answers the small cases badly: zero comes back as the literal
@@ -207,7 +216,14 @@ public enum Format {
     /// unfinished. Irregular plurals are passed in when a noun needs them.
     public static func count(_ value: Int, _ singular: String, _ plural: String? = nil) -> String {
         let noun = value == 1 ? singular : (plural ?? singular + "s")
-        return "\(value.formatted(.number.grouping(.automatic))) \(noun)"
+        // Japanese does not pluralise: it uses a counter after the noun ("ソース 5 件"), so
+        // appending "s" is wrong there and no per-noun table entry could fix the word order.
+        // The translated template moves the number, which is why it is looked up first.
+        let template = L("%@ " + noun)
+        if template != "%@ " + noun {
+            return template.replacingOccurrences(of: "%@", with: count(value))
+        }
+        return "\(count(value)) \(noun)"
     }
 
     /// A word count for source lists, where "1 word" / "58 words" is more useful than a
@@ -224,11 +240,17 @@ public enum Format {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         formatter.dateTimeStyle = .named
-        return formatter.localizedString(for: date, relativeTo: Date())
+        // Follow the interface language, not the system locale: choosing 日本語 in the app
+        // should not leave "2 hours ago" in English. macOS supplies the wording, so the
+        // translation table needs no entry for every combination of unit and tense.
+        formatter.locale = Locale(identifier: Localizer.shared.current.rawValue)
+        return formatter.localizedString(for: date, relativeTo: referenceNow ?? Date())
     }
 
     public static func shortDate(_ date: Date) -> String {
         let formatter = DateFormatter()
+        // Same reasoning as `relative`: the interface language decides, not the Mac's locale.
+        formatter.locale = Locale(identifier: Localizer.shared.current.rawValue)
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)

@@ -20,9 +20,9 @@ struct ExportSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingMedium) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Export notebook")
+                Text(L("Export notebook"))
                     .font(.system(size: 15, weight: .semibold))
-                Text("Exports to an open, documented archive: a plain zip you can open with any tool. API keys and application settings are never included.")
+                Text(L("Exports to an open, documented archive: a plain zip you can open with any tool. API keys and application settings are never included."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -30,23 +30,23 @@ struct ExportSheet: View {
 
             if let notebook {
                 VStack(alignment: .leading, spacing: 4) {
-                    SectionHeader("Contents")
+                    SectionHeader(L("Contents"))
                     DetailRow(label: "Notebook", value: notebook.title)
-                    DetailRow(label: "Sources", value: "\(Format.count(app.sources.count, "source")) · \(Format.count(app.sources.reduce(0) { $0 + $1.chunkCount }, "passage"))")
+                    DetailRow(label: L("Sources"), value: "\(Format.count(app.sources.count, "source")) · \(Format.count(app.sources.reduce(0) { $0 + $1.chunkCount }, "passage"))")
                     DetailRow(label: "Conversations", value: "\(app.sessions.count) session\(app.sessions.count == 1 ? "" : "s")")
-                    DetailRow(label: "Notes", value: "\(app.notes.count)")
+                    DetailRow(label: L("Notes"), value: "\(app.notes.count)")
                     DetailRow(label: "Stored text", value: Format.bytes(app.sources.reduce(0) { $0 + $1.plainTextBytes }))
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    SectionHeader("Options")
-                    Toggle("Include original downloaded files", isOn: $includeOriginals)
-                    Toggle("Include stored vectors (skips re-embedding on import)", isOn: $includeEmbeddings)
-                    Toggle("Include readable Markdown copies of chats and notes", isOn: $includeMarkdown)
+                    SectionHeader(L("Options"))
+                    Toggle(L("Include original downloaded files"), isOn: $includeOriginals)
+                    Toggle(L("Include stored vectors (skips re-embedding on import)"), isOn: $includeEmbeddings)
+                    Toggle(L("Include readable Markdown copies of chats and notes"), isOn: $includeMarkdown)
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    SectionHeader("Archive layout")
+                    SectionHeader(L("Archive layout"))
                     Text("""
                     \(NotebookArchive.sanitize(notebook.title))/
                       notebook.json          notebook, sources, sessions, notes
@@ -81,7 +81,7 @@ struct ExportSheet: View {
                     ErrorCard(title: error.title, message: error.message, recovery: error.recovery) { self.error = nil }
                 }
             } else {
-                Text("Select a notebook first.")
+                Text(L("Select a notebook first."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             }
@@ -90,13 +90,13 @@ struct ExportSheet: View {
 
             HStack {
                 if let result {
-                    Button("Reveal in Finder") {
+                    Button(L("Reveal in Finder")) {
                         NSWorkspace.shared.activateFileViewerSelecting([result.url])
                     }
                 }
                 Spacer()
-                Button("Close") { dismiss() }
-                Button("Choose Location and Export…") { beginExport() }
+                Button(L("Close")) { dismiss() }
+                Button(L("Choose Location and Export…")) { beginExport() }
                     .buttonStyle(.borderedProminent)
                     .disabled(notebook == nil || isExporting)
             }
@@ -160,15 +160,15 @@ struct ImportSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingMedium) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Import notebook")
+                Text(L("Import notebook"))
                     .font(.system(size: 15, weight: .semibold))
-                Text("Importing always creates a new notebook with its own identity, so importing twice never overwrites existing work.")
+                Text(L("Importing always creates a new notebook with its own identity, so importing twice never overwrites existing work."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Button("Choose a .nbk Archive…") { chooseFile() }
+            Button(L("Choose a .nbk Archive…")) { chooseFile() }
 
             if let archiveURL {
                 Text(app.paths.displayPath(archiveURL))
@@ -180,15 +180,15 @@ struct ImportSheet: View {
 
             if let manifest {
                 VStack(alignment: .leading, spacing: 4) {
-                    SectionHeader("Archive contents")
+                    SectionHeader(L("Archive contents"))
                     DetailRow(label: "Notebook", value: manifest.notebook.title)
                     DetailRow(label: "Exported", value: Format.shortDate(manifest.exportedAt))
                     DetailRow(label: "By", value: manifest.generator)
-                    DetailRow(label: "Sources", value: "\(manifest.counts.sources)")
-                    DetailRow(label: "Passages", value: Format.count(manifest.counts.chunks))
+                    DetailRow(label: L("Sources"), value: "\(manifest.counts.sources)")
+                    DetailRow(label: L("Passages"), value: Format.count(manifest.counts.chunks))
                     DetailRow(label: "Vectors", value: Format.count(manifest.counts.embeddings))
                     DetailRow(label: "Conversations", value: "\(manifest.counts.sessions) · \(Format.count(manifest.counts.messages, "message"))")
-                    DetailRow(label: "Notes", value: "\(manifest.counts.notes)")
+                    DetailRow(label: L("Notes"), value: "\(manifest.counts.notes)")
                     if !manifest.embeddingModels.isEmpty {
                         DetailRow(label: "Embedding models", value: manifest.embeddingModels.joined(separator: ", "))
                     }
@@ -197,7 +197,7 @@ struct ImportSheet: View {
 
             if isImporting {
                 ProgressView(value: progress).progressViewStyle(.linear)
-                Text("Restoring sources, passages, conversations and notes…")
+                Text(L("Restoring sources, passages, conversations and notes…"))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             }
@@ -207,11 +207,11 @@ struct ImportSheet: View {
                     Label("Imported “\(result.notebook.title)”", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.green)
-                    DetailRow(label: "Sources", value: "\(result.sourceCount)")
-                    DetailRow(label: "Passages", value: Format.count(result.chunkCount))
+                    DetailRow(label: L("Sources"), value: "\(result.sourceCount)")
+                    DetailRow(label: L("Passages"), value: Format.count(result.chunkCount))
                     DetailRow(label: "Messages", value: "\(result.messageCount)")
                     if !result.skipped.isEmpty {
-                        SectionHeader("Not restored")
+                        SectionHeader(L("Not restored"))
                         ForEach(result.skipped, id: \.title) { item in
                             Text("\(item.title): \(item.reason)")
                                 .font(Design.caption)
@@ -230,12 +230,12 @@ struct ImportSheet: View {
 
             HStack {
                 if result != nil {
-                    Button("Open It") { dismiss() }
+                    Button(L("Open It")) { dismiss() }
                         .buttonStyle(.borderedProminent)
                 }
                 Spacer()
-                Button("Close") { dismiss() }
-                Button("Import") {
+                Button(L("Close")) { dismiss() }
+                Button(L("Import")) {
                     performImport()
                 }
                 .buttonStyle(.borderedProminent)

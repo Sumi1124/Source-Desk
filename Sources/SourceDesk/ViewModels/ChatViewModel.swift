@@ -72,19 +72,19 @@ final class ChatViewModel {
         if let overrideScope { workingSession.scope = overrideScope }
         workingSession.providerID = app.settings.preferredProviderID
         workingSession.modelName = app.currentModelName
-        try? store.upsert(session: workingSession)
+        _ = try? store.upsert(session: workingSession)
 
         // Persist the question immediately: if the app quits mid-answer, the
         // question is still there with its history.
         let userMessage = ChatMessage(sessionID: session.id, notebookID: notebookID, role: .user, content: trimmed)
-        try? store.upsert(message: userMessage)
+        _ = try? store.upsert(message: userMessage)
         messages.append(userMessage)
 
         // First question names the session.
         if messages.filter({ $0.role == .user }).count == 1 {
             var renamed = workingSession
             renamed.title = Self.sessionTitle(from: trimmed)
-            try? store.upsert(session: renamed)
+            _ = try? store.upsert(session: renamed)
             app.reloadNotebookContent()
         }
 
@@ -181,8 +181,8 @@ final class ChatViewModel {
             promptTokens: outcome.usage.promptTokens,
             completionTokens: outcome.usage.completionTokens
         )
-        try? store.upsert(message: message)
-        try? store.touchNotebook(id: notebookID)
+        _ = try? store.upsert(message: message)
+        _ = try? store.touchNotebook(id: notebookID)
         messages.append(message)
         app.activeCitations = outcome.citations
         app.activeTrace = outcome.trace
@@ -203,7 +203,7 @@ final class ChatViewModel {
             errorMessage: error.errorDescription,
             errorRecovery: error.recoverySuggestion
         )
-        try? store.upsert(message: message)
+        _ = try? store.upsert(message: message)
         messages.append(message)
         app.lastError = AppState.PresentedError(error)
         suggestedFollowUps = Self.suggestions(for: question, outcome: nil)

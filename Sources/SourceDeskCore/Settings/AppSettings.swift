@@ -82,6 +82,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Stored rather than inferred from "is the library empty", because a user who deletes
     /// every notebook has not asked to see onboarding again.
     public var hasCompletedOnboarding: Bool
+
+    /// Which language the interface is shown in. `.system` follows the Mac's own setting.
+    public var language: AppLanguage
     /// The step the welcome flow was left on, so re-opening it resumes rather than restarts.
     public var onboardingStepIndex: Int
     /// The local model the welcome flow chose, if any. Recorded so the flow's summary can
@@ -144,6 +147,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         chatFontSize = 13
 
         hasCompletedOnboarding = false
+        language = .system
         onboardingStepIndex = 0
         onboardingSelectedModel = ""
         logLevel = .error
@@ -282,6 +286,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         keepChatHistoryDays = decode(.keepChatHistoryDays, keepChatHistoryDays)
 
         if let mode = try? container.decode(AppearanceMode.self, forKey: .appearance) { appearance = mode }
+        // Same reasoning as appearance: a settings blob written before the language existed
+        // must open, and default to following the Mac.
+        if let chosen = try? container.decode(AppLanguage.self, forKey: .language) { language = chosen }
         showInspector = decode(.showInspector, showInspector)
         showSourceWordCounts = decode(.showSourceWordCounts, showSourceWordCounts)
         chatFontSize = decode(.chatFontSize, chatFontSize)
@@ -421,14 +428,14 @@ public final class DiagnosticsLog: @unchecked Sendable {
                     // Rotate: keep the newest half rather than growing without bound.
                     if let existing = try? Data(contentsOf: url) {
                         let half = existing.suffix(existing.count / 2)
-                        try? half.write(to: url, options: .atomic)
+                        _ = try? half.write(to: url, options: .atomic)
                     }
                 }
-                try? handle.write(contentsOf: data)
+                _ = try? handle.write(contentsOf: data)
             }
         } else {
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try? data.write(to: url, options: .atomic)
+            _ = try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            _ = try? data.write(to: url, options: .atomic)
         }
     }
 

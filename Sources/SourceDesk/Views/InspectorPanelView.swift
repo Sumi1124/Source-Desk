@@ -48,11 +48,11 @@ struct InspectorPanelView: View {
 
     private var tabTitle: String {
         switch app.section {
-        case .sources: return app.selectedSource == nil ? "Inspector" : "Source"
-        case .research: return "Answer detail"
-        case .notes: return "Note"
-        case .studyTools: return "Study material"
-        case .search: return "Search"
+        case .sources: return app.selectedSource == nil ? L("Inspector") : L("Source")
+        case .research: return L("Answer detail")
+        case .notes: return L("Note")
+        case .studyTools: return L("Study material")
+        case .search: return L("Search")
         }
     }
 
@@ -82,7 +82,7 @@ private struct SourceQuickActions: View {
                     Image(systemName: "arrow.clockwise").font(.system(size: 11))
                 }
                 .buttonStyle(.plain)
-                .help("Re-download this page")
+                .help(L("Re-download this page"))
             }
             Button {
                 app.reindexSource(source.id)
@@ -96,10 +96,10 @@ private struct SourceQuickActions: View {
                     app.toggleSourceInRetrieval(source)
                 }
                 if let url = source.url, let parsed = URL(string: url) {
-                    Button("Open in Browser") { NSWorkspace.shared.open(parsed) }
+                    Button(L("Open in Browser")) { NSWorkspace.shared.open(parsed) }
                 }
                 if let path = source.filePath {
-                    Button("Reveal Original") {
+                    Button(L("Reveal Original")) {
                         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                     }
                 }
@@ -161,7 +161,7 @@ struct SourceInspector: View {
 
             if let error = source.errorMessage {
                 VStack(alignment: .leading, spacing: 5) {
-                    SectionHeader("Problem")
+                    SectionHeader(L("Problem"))
                     ErrorCard(title: "This source could not be fully added",
                               message: error, recovery: source.errorRecovery,
                               isWarning: source.status == .partial)
@@ -170,10 +170,10 @@ struct SourceInspector: View {
 
             // Contents
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Contents")
-                DetailRow(label: "Passages", value: Format.count(source.chunkCount))
-                if source.wordCount > 0 { DetailRow(label: "Words", value: Format.count(source.wordCount)) }
-                if let pages = source.pageCount { DetailRow(label: "Pages", value: Format.count(pages)) }
+                SectionHeader(L("Contents"))
+                DetailRow(label: L("Passages"), value: Format.count(source.chunkCount))
+                if source.wordCount > 0 { DetailRow(label: L("Words"), value: Format.count(source.wordCount)) }
+                if let pages = source.pageCount { DetailRow(label: L("Pages"), value: Format.count(pages)) }
                 if source.plainTextBytes > 0 {
                     DetailRow(label: "Stored text", value: Format.bytes(source.plainTextBytes))
                 }
@@ -181,7 +181,7 @@ struct SourceInspector: View {
                     DetailRow(label: "Downloaded", value: Format.bytes(source.originalBytes))
                 }
                 if let method = source.extractionMethod {
-                    DetailRow(label: "Extracted by", value: method)
+                    DetailRow(label: L("Extracted by"), value: method)
                 }
                 if let ms = source.fetchMilliseconds {
                     DetailRow(label: "Fetch time", value: Format.milliseconds(ms))
@@ -190,26 +190,26 @@ struct SourceInspector: View {
 
             // Dates
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Timeline")
-                DetailRow(label: "Added", value: Format.shortDate(source.addedAt))
+                SectionHeader(L("Timeline"))
+                DetailRow(label: L("Added"), value: Format.shortDate(source.addedAt))
                 if let fetched = source.fetchedAt {
-                    DetailRow(label: "Fetched", value: Format.shortDate(fetched))
+                    DetailRow(label: L("Fetched"), value: Format.shortDate(fetched))
                 }
                 if let published = source.publishedAt {
-                    DetailRow(label: "Published", value: Format.shortDate(published))
+                    DetailRow(label: L("Published"), value: Format.shortDate(published))
                 }
                 // Absolute, like every other row here. A relative time in a list of dates
                 // reads as a different kind of fact, and it changes on every render, which
                 // made the screenshots impossible to compare run to run.
-                DetailRow(label: "Updated", value: Format.shortDate(source.updatedAt))
+                DetailRow(label: L("Updated"), value: Format.shortDate(source.updatedAt))
             }
 
             // Privacy
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Privacy")
+                SectionHeader(L("Privacy"))
                 PrivacyNotice(level: .local, detailOverride: "The stored text lives in \(app.paths.displayPath(app.paths.contentDirectory(for: source.id)))")
                 if app.settings.storeOriginalDownloads, source.filePath != nil {
-                    Text("The original file is kept in the same folder, so the source survives the file being moved.")
+                    Text(L("The original file is kept in the same folder, so the source survives the file being moved."))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -218,8 +218,8 @@ struct SourceInspector: View {
 
             // Extracted text
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Extracted text")
-                Button(showFullText ? "Hide" : "Show \(Format.words(source.wordCount))") {
+                SectionHeader(L("Extracted text"))
+                Button(showFullText ? L("Hide") : L("Show %@", Format.words(source.wordCount))) {
                     if !showFullText && fullText.isEmpty {
                         fullText = app.sourceText(for: source)
                     }
@@ -244,8 +244,8 @@ struct SourceInspector: View {
 
             // Passages, so the retrieval unit is visible
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Passages sent to the model")
-                Button(showPassages ? "Hide" : "Show how this source is split") {
+                SectionHeader(L("Passages sent to the model"))
+                Button(showPassages ? L("Hide") : L("Show how this source is split")) {
                     if !showPassages && chunks.isEmpty {
                         chunks = app.chunks(for: source.id)
                     }
@@ -256,7 +256,7 @@ struct SourceInspector: View {
 
                 if showPassages {
                     if chunks.isEmpty {
-                        Text("This source has no passages yet — re-index it from the actions above.")
+                        Text(L("This source has no passages yet — re-index it from the actions above."))
                             .font(Design.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -301,7 +301,7 @@ struct SourceInspector: View {
 
             // Personal notes on the source
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Your note on this source")
+                SectionHeader(L("Your note on this source"))
                 TextEditor(text: $notesDraft)
                     .font(.system(size: 11))
                     .frame(height: 70)
@@ -310,11 +310,11 @@ struct SourceInspector: View {
                     .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
                 HStack {
                     Spacer()
-                    Button("Save Note") {
+                    Button(L("Save Note")) {
                         var copy = source
                         copy.notes = notesDraft
                         if let store = app.store {
-                            try? store.upsert(source: copy)
+                            _ = try? store.upsert(source: copy)
                             app.reloadNotebookContent()
                             app.statusMessage = "Source note saved"
                         }
@@ -346,9 +346,9 @@ struct ResearchInspector: View {
         VStack(alignment: .leading, spacing: Design.spacingLarge) {
             if app.activeCitations.isEmpty {
                 VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                    Text("No citations yet")
+                    Text(L("No citations yet"))
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Ask a question and the passages behind the answer appear here — with their source, page and excerpt, so you can check the answer rather than trust it.")
+                    Text(L("Ask a question and the passages behind the answer appear here — with their source, page and excerpt, so you can check the answer rather than trust it."))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -356,7 +356,7 @@ struct ResearchInspector: View {
                 .padding(.top, Design.spacingMedium)
             } else {
                 VStack(alignment: .leading, spacing: 5) {
-                    SectionHeader("Citations in this answer")
+                    SectionHeader(L("Citations in this answer"))
                     ForEach(app.activeCitations) { citation in
                         CitationDetail(citation: citation)
                     }
@@ -365,7 +365,7 @@ struct ResearchInspector: View {
 
             if let trace = app.activeTrace {
                 VStack(alignment: .leading, spacing: 5) {
-                    SectionHeader("Retrieval")
+                    SectionHeader(L("Retrieval"))
                     DetailRow(label: "Query", value: trace.query)
                     DetailRow(label: "Candidates", value: Format.count(trace.candidateCount))
                     DetailRow(label: "Used", value: Format.count(trace.hits.count, "passage"))
@@ -387,7 +387,7 @@ struct ResearchInspector: View {
 
             if !chat.messages.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
-                    SectionHeader("This session")
+                    SectionHeader(L("This session"))
                     DetailRow(label: "Messages", value: Format.count(chat.messages.count))
                     if let session = chat.currentSession {
                         DetailRow(label: "Scope", value: session.scope.displayName)
@@ -440,14 +440,14 @@ struct CitationDetail: View {
 
             HStack(spacing: Design.spacingSmall) {
                 if let sourceID = citation.sourceID {
-                    Button("Open source") {
+                    Button(L("Open source")) {
                         app.selectedSourceID = sourceID
                         app.section = .sources
                     }
                     .buttonStyle(.link)
                     .font(Design.caption)
                 }
-                Button("Copy excerpt") {
+                Button(L("Copy excerpt")) {
                     let pasteboard = NSPasteboard.general
                     pasteboard.clearContents()
                     pasteboard.setString(citation.excerpt, forType: .string)
@@ -472,21 +472,21 @@ struct NotesInspector: View {
         VStack(alignment: .leading, spacing: Design.spacingLarge) {
             if let note = app.selectedNote {
                 VStack(alignment: .leading, spacing: 5) {
-                    SectionHeader("Details")
+                    SectionHeader(L("Details"))
                     DetailRow(label: "Kind", value: note.kind.displayName)
                     DetailRow(label: "Created", value: Format.shortDate(note.createdAt))
-                    DetailRow(label: "Updated", value: Format.relative(note.updatedAt))
+                    DetailRow(label: L("Updated"), value: Format.relative(note.updatedAt))
                     if let model = note.modelName {
-                        DetailRow(label: "Model", value: model)
+                        DetailRow(label: L("Model"), value: model)
                     }
                     if !note.sourceIDs.isEmpty {
-                        DetailRow(label: "Sources", value: "\(note.sourceIDs.count)")
+                        DetailRow(label: L("Sources"), value: "\(note.sourceIDs.count)")
                     }
                 }
 
                 if let payload = note.payload, !payload.isEmpty {
                     VStack(alignment: .leading, spacing: 5) {
-                        SectionHeader("Structured content")
+                        SectionHeader(L("Structured content"))
                         if !payload.flashcards.isEmpty {
                             DetailRow(label: "Cards", value: Format.count(payload.flashcards.count))
                         }
@@ -498,7 +498,7 @@ struct NotesInspector: View {
 
                 if !note.sourceIDs.isEmpty {
                     VStack(alignment: .leading, spacing: 5) {
-                        SectionHeader("Built from")
+                        SectionHeader(L("Built from"))
                         ForEach(note.sourceIDs, id: \.self) { id in
                             if let source = app.sources.first(where: { $0.id == id }) {
                                 Button {
@@ -519,9 +519,9 @@ struct NotesInspector: View {
                 }
             } else {
                 VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                    Text("No note selected")
+                    Text(L("No note selected"))
                         .font(.system(size: 12, weight: .semibold))
-                    Text("Select a note to see where it came from, or generate study material from the Study Tools section.")
+                    Text(L("Select a note to see where it came from, or generate study material from the Study Tools section."))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -540,9 +540,9 @@ struct StudyToolsInspector: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingLarge) {
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Material")
-                DetailRow(label: "Sources", value: "\(app.sources.count)")
-                DetailRow(label: "Passages", value: Format.count(app.sources.reduce(0) { $0 + $1.chunkCount }))
+                SectionHeader(L("Material"))
+                DetailRow(label: L("Sources"), value: "\(app.sources.count)")
+                DetailRow(label: L("Passages"), value: Format.count(app.sources.reduce(0) { $0 + $1.chunkCount }))
                 if let ids = study.effectiveSourceIDs {
                     DetailRow(label: "Selected", value: "\(ids.count) of \(app.sources.count)")
                 } else {
@@ -552,15 +552,15 @@ struct StudyToolsInspector: View {
 
             if let note = study.currentNote, let payload = note.payload, !payload.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
-                    SectionHeader("Generated")
+                    SectionHeader(L("Generated"))
                     DetailRow(label: "Cards", value: Format.count(payload.flashcards.count))
                     DetailRow(label: "Questions", value: Format.count(payload.quizItems.count))
-                    DetailRow(label: "Model", value: note.modelName ?? "—")
+                    DetailRow(label: L("Model"), value: note.modelName ?? "—")
                 }
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                SectionHeader("Tools")
+                SectionHeader(L("Tools"))
                 ForEach(StudyToolsService.availableTools, id: \.self) { tool in
                     HStack(spacing: 5) {
                         Image(systemName: tool.symbolName)

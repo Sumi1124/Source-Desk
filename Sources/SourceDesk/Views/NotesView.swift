@@ -67,7 +67,7 @@ struct NotesView: View {
         VStack(spacing: 0) {
             HStack(spacing: Design.spacingSmall) {
                 Menu {
-                    Button("All notes") { kindFilter = nil }
+                    Button(L("All notes")) { kindFilter = nil }
                     Divider()
                     ForEach(NoteKind.allCases, id: \.self) { kind in
                         Button(kind.displayName) { kindFilter = kind }
@@ -128,7 +128,7 @@ struct NotesView: View {
                     .padding(.vertical, 2)
                     .tag(note.id)
                     .contextMenu {
-                        Button("Copy") {
+                        Button(L("Copy")) {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(note.body, forType: .string)
                         }
@@ -142,7 +142,7 @@ struct NotesView: View {
                 }
             }
             .listStyle(.sidebar)
-            .searchable(text: $searchText, placement: .sidebar, prompt: "Search notes")
+            .searchable(text: $searchText, placement: .sidebar, prompt: L("Search notes"))
         }
     }
 
@@ -173,12 +173,12 @@ struct NotesView: View {
                 Spacer(minLength: Design.spacingSmall)
 
                 if isEditing {
-                    Button("Cancel") {
+                    Button(L("Cancel")) {
                         isEditing = false
                         editorTitle = note.title
                         editorBody = note.body
                     }
-                    Button("Save") {
+                    Button(L("Save")) {
                         var copy = note
                         copy.title = editorTitle
                         copy.body = editorBody
@@ -187,17 +187,17 @@ struct NotesView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 } else {
-                    Button("Edit") {
+                    Button(L("Edit")) {
                         editorTitle = note.title
                         editorBody = note.body
                         isEditing = true
                     }
                     Menu {
-                        Button("Copy Note") {
+                        Button(L("Copy Note")) {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(note.body, forType: .string)
                         }
-                        Button("Export Note as Markdown…") { exportNote(note) }
+                        Button(L("Export Note as Markdown…")) { exportNote(note) }
                         Button(note.isPinned ? "Unpin" : "Pin") {
                             var copy = note
                             copy.isPinned.toggle()
@@ -256,7 +256,7 @@ struct NotesView: View {
                                 .font(Design.caption)
                             }
                         } else if note.body.isEmpty {
-                            Text("This note is empty.")
+                            Text(L("This note is empty."))
                                 .font(Design.caption)
                                 .foregroundStyle(.secondary)
                         } else {
@@ -312,7 +312,7 @@ struct FlashcardDeck: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingSmall) {
             HStack {
-                SectionHeader("Flashcards")
+                SectionHeader(L("Flashcards"))
                 Text("\(min(index + 1, cards.count)) of \(cards.count)")
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
@@ -353,10 +353,10 @@ struct FlashcardDeck: View {
 
                 Spacer()
 
-                Button("Previous") { index = max(0, index - 1) }
+                Button(L("Previous")) { index = max(0, index - 1) }
                     .controlSize(.small)
                     .disabled(index == 0)
-                Button("Next") { index = min(cards.count - 1, index + 1) }
+                Button(L("Next")) { index = min(cards.count - 1, index + 1) }
                     .controlSize(.small)
                     .disabled(index >= cards.count - 1)
             }
@@ -377,7 +377,7 @@ struct QuizRunner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingMedium) {
             HStack {
-                SectionHeader("Quiz")
+                SectionHeader(L("Quiz"))
                 Text("\(score) of \(items.count) correct")
                     .font(Design.caption)
                     .foregroundStyle(.secondary)

@@ -110,7 +110,7 @@ public enum FileStore {
     }
 
     public static func remove(_ url: URL) {
-        try? FileManager.default.removeItem(at: url)
+        _ = try? FileManager.default.removeItem(at: url)
     }
 
     /// SHA-256 via CryptoKit, for content de-duplication and export manifests.

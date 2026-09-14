@@ -49,7 +49,7 @@ enum ScreenshotRenderer {
         NSApp.appearance = NSAppearance(named: darkMode ? .darkAqua : .aqua)
 
         let directory = URL(fileURLWithPath: outputDirectory)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        _ = try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         // A scratch library, seeded if it is empty, so screenshots always show content.
         //
@@ -65,13 +65,18 @@ enum ScreenshotRenderer {
         let root = ProcessInfo.processInfo.environment["SOURCEDESK_SEED_ROOT"]
             ?? (NSHomeDirectory() + "/Library/Application Support/SourceDesk Demo")
         let paths = AppPaths(root: URL(fileURLWithPath: root))
-        try? paths.createDirectories()
+        _ = try? paths.createDirectories()
 
         if (try? NotebookStore(paths: paths).notebooks().isEmpty) ?? true {
             do { try DemoSeed.run(root: root) } catch {
                 print("Could not seed the demo library: \(error)")
             }
         }
+
+        // Pin the relative-date clock to the demo instant: without this, "3 hours ago"
+        // became "4 hours ago" as real time passed, and the staleness check failed even
+        // though nothing in the interface had changed.
+        Format.referenceNow = DemoSeed.demoNow
 
         let app = AppState(paths: paths)
         app.start()
@@ -164,7 +169,7 @@ enum ScreenshotRenderer {
 
         // 7. Settings. A TabView renders no chrome without a real window, so each pane
         //    is captured on its own — which is also what a reader wants to see.
-        let settingsPane = { (content: AnyView, name: String) in
+        let settingsPane: (AnyView, String) -> Void = { content, name in
             render(
                 environment(AnyView(
                     content
@@ -205,6 +210,28 @@ enum ScreenshotRenderer {
             showsToolbar: false
         )
 
+        // The Japanese interface, so the translation is visible to a reader who speaks it
+        // rather than only asserted by the harness. Language is process-wide state, so it is
+        // set here and restored immediately afterwards — the captures after this one must
+        // stay in the default language.
+        let savedLanguage = Localizer.shared.current
+        Localizer.shared.setLanguage(.japanese)
+        app.section = .research
+        render(
+            environment(AnyView(columns())),
+            to: output("12-research-japanese.png"),
+            label: "japanese main window",
+            size: NSSize(width: 1_360, height: 800)
+        )
+        app.section = .sources
+        render(
+            environment(AnyView(columns())),
+            to: output("12-sources-japanese.png"),
+            label: "japanese sources",
+            size: NSSize(width: 1_360, height: 800)
+        )
+        Localizer.shared.setLanguage(savedLanguage)
+
         // 10. The empty state, which is part of the product, not an accident.
         let emptyPaths = AppPaths(root: FileManager.default.temporaryDirectory
             .appendingPathComponent("sourcedesk-empty-\(UUID().uuidString)", isDirectory: true))
@@ -223,7 +250,7 @@ enum ScreenshotRenderer {
             title: "SourceDesk",
             size: NSSize(width: 1_120, height: 760)
         )
-        try? FileManager.default.removeItem(at: emptyPaths.root)
+        _ = try? FileManager.default.removeItem(at: emptyPaths.root)
 
         // 11. The welcome flow, captured on the seeded library so the model step has real
         // providers to show. Each step is a separate image because the flow is what a new
@@ -264,7 +291,7 @@ enum ScreenshotRenderer {
             title: "SourceDesk",
             size: NSSize(width: Design.onboardingWidth, height: Design.onboardingHeight)
         )
-        try? FileManager.default.removeItem(at: paths.root)
+        _ = try? FileManager.default.removeItem(at: paths.root)
     }
 
     /// Window size for the root capture. Overridable with `SOURCEDESK_WINDOW_SIZE=WxH`, so a
@@ -521,14 +548,37 @@ enum ScreenshotRenderer {
         }
 
         // The theme frame owns the title bar and toolbar; the content view does not.
-        guard let themeFrame = window.contentView?.superview,
-              let rep = themeFrame.bitmapImageRepForCachingDisplay(in: themeFrame.bounds) else {
-            print("  ✗ \(label): no bitmap representation available")
+        guard let themeFrame = window.contentView?.superview else {
+            print("  ✗ \(label): no theme frame available")
             window.orderOut(nil)
             return false
         }
         themeFrame.layoutSubtreeIfNeeded()
         let captureBounds = themeFrame.bounds
+
+        // The capture scale is pinned to 2× rather than taken from the window: an
+        // off-screen window's backing scale is whatever AppKit last handed it, so the
+        // same run could produce a 2720-pixel image and then a 1360-pixel one, and the
+        // staleness check compared images of different sizes. A fixed scale makes every
+        // capture the same size no matter which display the process happens to inherit.
+        let captureScale: CGFloat = 2
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(captureBounds.width * captureScale),
+            pixelsHigh: Int(captureBounds.height * captureScale),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else {
+            print("  ✗ \(label): no bitmap representation available")
+            window.orderOut(nil)
+            return false
+        }
+        rep.size = captureBounds.size
         themeFrame.cacheDisplay(in: captureBounds, to: rep)
         // `cacheDisplay` fills the bitmap's buffer, but `representation(using:)` reads
         // the colour data through the rep's own planes; creating a fresh bitmap from

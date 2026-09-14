@@ -21,10 +21,10 @@ struct SourcesView: View {
         var id: String { rawValue }
         var displayName: String {
             switch self {
-            case .all: return "All"
-            case .ready: return "Ready"
-            case .issues: return "Needs attention"
-            case .excluded: return "Excluded"
+            case .all: return L("All")
+            case .ready: return L("Ready")
+            case .issues: return L("Needs attention")
+            case .excluded: return L("Excluded")
             }
         }
     }
@@ -34,10 +34,10 @@ struct SourcesView: View {
         var id: String { rawValue }
         var displayName: String {
             switch self {
-            case .added: return "Date added"
-            case .title: return "Title"
-            case .size: return "Size"
-            case .passages: return "Passages"
+            case .added: return L("Date added")
+            case .title: return L("Title")
+            case .size: return L("Size")
+            case .passages: return L("Passages")
             }
         }
     }
@@ -129,9 +129,9 @@ struct SourcesView: View {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .font(.system(size: 10))
                                     .foregroundStyle(.orange)
-                                Text(Format.count(issueCount, "source") + " could not be added.")
+                                Text(L("%@ could not be added.", Format.count(issueCount, "source")))
                                     .font(Design.caption)
-                                Button("Show") { filter = .issues }
+                                Button(L("Show")) { filter = .issues }
                                     .buttonStyle(.link)
                                     .font(Design.caption)
                             }
@@ -168,14 +168,14 @@ struct SourcesView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The extracted text, stored files and passages for every source in this notebook will be deleted from this Mac. The notebook, its chats and its notes stay.")
+            Text(L("The extracted text, stored files and passages for every source in this notebook will be deleted from this Mac. The notebook, its chats and its notes stay."))
         }
     }
 
     private var header: some View {
         HStack(spacing: Design.spacingSmall) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Sources")
+                Text(L("Sources"))
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                 // Words first because that is what a researcher thinks in; the byte figure
@@ -190,7 +190,7 @@ struct SourcesView: View {
 
             Spacer(minLength: Design.spacingSmall)
 
-            Picker("Filter", selection: $filter) {
+            Picker(L("Filter"), selection: $filter) {
                 ForEach(Filter.allCases) { value in
                     Text(value.displayName).tag(value)
                 }
@@ -199,7 +199,7 @@ struct SourcesView: View {
             .labelsHidden()
             .frame(width: 150)
 
-            Picker("Sort", selection: $sortOrder) {
+            Picker(L("Sort"), selection: $sortOrder) {
                 ForEach(SortOrder.allCases) { value in
                     Text(value.displayName).tag(value)
                 }
@@ -212,7 +212,7 @@ struct SourcesView: View {
                 topicPanelOpen.toggle()
                 if !topicPanelOpen { app.cancelDiscovery() }
             } label: {
-                Label("Find Sources", systemImage: "sparkle.magnifyingglass")
+                Label(L("Find Sources"), systemImage: "sparkle.magnifyingglass")
             }
             .controlSize(.small)
             .help("Search for sources about a topic, with the AI choosing which results to keep")
@@ -249,7 +249,7 @@ struct SourcesView: View {
                 Image(systemName: "sparkle.magnifyingglass")
                     .font(.system(size: 11))
                     .foregroundStyle(.tint)
-                Text("Find sources by topic")
+                Text(L("Find sources by topic"))
                     .font(.system(size: 12, weight: .semibold))
                 Spacer()
                 Button {
@@ -261,10 +261,10 @@ struct SourcesView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
-                .help("Close")
+                .help(L("Close"))
             }
 
-            Text("DuckDuckGo finds candidates and your selected AI model chooses the useful ones. Nothing is downloaded until you approve it.")
+            Text(L("DuckDuckGo finds candidates and your selected AI model chooses the useful ones. Nothing is downloaded until you approve it."))
                 .font(Design.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -285,7 +285,7 @@ struct SourcesView: View {
                 TextField("Topic, e.g. “causes of the industrial decline”", text: $topicText)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { runTopicSearch() }
-                Picker("Keep", selection: $keepCount) {
+                Picker(L("Keep"), selection: $keepCount) {
                     ForEach([2, 3, 4, 6, 8], id: \.self) { Text("keep \($0)").tag($0) }
                 }
                 .labelsHidden()
@@ -327,7 +327,7 @@ struct SourcesView: View {
                     ProgressView().controlSize(.small)
                     Text("Downloading \(index) of \(total)").font(.system(size: 11, weight: .medium))
                     Spacer()
-                    Button("Cancel") { app.cancelDiscovery() }.controlSize(.small)
+                    Button(L("Cancel")) { app.cancelDiscovery() }.controlSize(.small)
                 }
                 Text(title).font(Design.caption).foregroundStyle(.secondary).lineLimit(1)
                 ProgressView(value: Double(index - 1), total: Double(max(1, total)))
@@ -338,7 +338,7 @@ struct SourcesView: View {
                 ProgressView().controlSize(.small)
                 Text(app.discoveryPhase.label).font(.system(size: 11))
                 Spacer()
-                Button("Cancel") { app.cancelDiscovery() }.controlSize(.small)
+                Button(L("Cancel")) { app.cancelDiscovery() }.controlSize(.small)
             }
         }
     }
@@ -368,7 +368,7 @@ struct SourcesView: View {
             }
 
             if plan.selections.isEmpty {
-                Text("Nothing was selected. Try different wording.")
+                Text(L("Nothing was selected. Try different wording."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -384,11 +384,11 @@ struct SourcesView: View {
                 .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .textBackgroundColor)))
 
                 HStack {
-                    Button("Select All") {
+                    Button(L("Select All")) {
                         approved = Set(plan.selections.map(\.result.url))
                     }
                     .controlSize(.small)
-                    Button("Select None") { approved = [] }
+                    Button(L("Select None")) { approved = [] }
                         .controlSize(.small)
                     Spacer()
                     Button("Add \(approved.count) Source\(approved.count == 1 ? "" : "s")") {
@@ -471,22 +471,22 @@ struct SourcesView: View {
     @ViewBuilder
     private func contextMenu(for source: Source) -> some View {
         if let url = source.url {
-            Button("Open in Browser") {
+            Button(L("Open in Browser")) {
                 if let url = URL(string: url) { NSWorkspace.shared.open(url) }
             }
-            Button("Refresh from the web") { app.refreshSource(source) }
+            Button(L("Refresh from the web")) { app.refreshSource(source) }
             Divider()
         }
-        Button("Re-index (re-chunk and re-embed)") { app.reindexSource(source.id) }
+        Button(L("Re-index (re-chunk and re-embed)")) { app.reindexSource(source.id) }
         Button(source.includeInRetrieval ? "Exclude from answers" : "Include in answers") {
             app.toggleSourceInRetrieval(source)
         }
         if let path = source.filePath {
-            Button("Reveal Original File") {
+            Button(L("Reveal Original File")) {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
         }
-        Button("Reveal Stored Text") {
+        Button(L("Reveal Stored Text")) {
             if let path = source.contentPath {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
             }
@@ -620,7 +620,7 @@ struct AddWebsiteSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingMedium) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Add a website")
+                Text(L("Add a website"))
                     .font(.system(size: 15, weight: .semibold))
                 Text(mode == .address
                      ? "SourceDesk downloads the page, extracts the readable text, and stores it on this Mac."
@@ -630,7 +630,7 @@ struct AddWebsiteSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Picker("Mode", selection: $mode) {
+            Picker(L("Mode"), selection: $mode) {
                 ForEach(Mode.allCases, id: \.self) { value in
                     Text(value.label).tag(value)
                 }
@@ -679,7 +679,7 @@ struct AddWebsiteSheet: View {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 10))
                             .foregroundStyle(.orange)
-                        Text("Already in this notebook — re-adding refreshes the stored copy.")
+                        Text(L("Already in this notebook — re-adding refreshes the stored copy."))
                             .font(Design.caption)
                             .foregroundStyle(.orange)
                     }
@@ -694,17 +694,17 @@ struct AddWebsiteSheet: View {
         }
 
         VStack(alignment: .leading, spacing: 4) {
-            Label("The page is fetched once, now, and stored locally.", systemImage: "checkmark.circle")
-            Label("robots.txt is respected; a site that refuses automated access is reported, not bypassed.", systemImage: "hand.raised")
-            Label("Sign-in and paywalled pages cannot be read — save those as a PDF and import the file.", systemImage: "lock")
+            Label(L("The page is fetched once, now, and stored locally."), systemImage: "checkmark.circle")
+            Label(L("robots.txt is respected; a site that refuses automated access is reported, not bypassed."), systemImage: "hand.raised")
+            Label(L("Sign-in and paywalled pages cannot be read — save those as a PDF and import the file."), systemImage: "lock")
         }
         .font(Design.caption)
         .foregroundStyle(.secondary)
 
         HStack {
             Spacer()
-            Button("Cancel") { dismiss() }
-            Button("Add Website") { add() }
+            Button(L("Cancel")) { dismiss() }
+            Button(L("Add Website")) { add() }
                 .buttonStyle(.borderedProminent)
                 .disabled(urlText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
@@ -736,20 +736,20 @@ struct AddWebsiteSheet: View {
         }
 
         HStack(spacing: Design.spacingSmall) {
-            Text("Results to keep")
+            Text(L("Results to keep"))
                 .font(Design.caption)
                 .foregroundStyle(.secondary)
-            Picker("Results to keep", selection: $keepCount) {
+            Picker(L("Results to keep"), selection: $keepCount) {
                 ForEach([2, 3, 4, 6, 8], id: \.self) { Text("\($0)").tag($0) }
             }
             .labelsHidden()
             .frame(width: 70)
-            Text("the AI picks this many from the search results")
+            Text(L("the AI picks this many from the search results"))
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
             Spacer()
             if app.discoveryPlan != nil {
-                Button("Search Again") { plan() }
+                Button(L("Search Again")) { plan() }
                     .controlSize(.small)
             }
         }
@@ -758,9 +758,9 @@ struct AddWebsiteSheet: View {
         planSection
 
         VStack(alignment: .leading, spacing: 4) {
-            Label("Searching uses DuckDuckGo, which needs no key.", systemImage: "magnifyingglass")
+            Label(L("Searching uses DuckDuckGo, which needs no key."), systemImage: "magnifyingglass")
             Label("Your topic and the search result titles are sent to \(app.currentProvider?.displayName ?? "your model") so it can choose between them.", systemImage: "sparkles")
-            Label("Nothing is downloaded until you approve a result.", systemImage: "checkmark.circle")
+            Label(L("Nothing is downloaded until you approve a result."), systemImage: "checkmark.circle")
         }
         .font(.system(size: 10))
         .foregroundStyle(.tertiary)
@@ -768,7 +768,7 @@ struct AddWebsiteSheet: View {
 
         HStack {
             Spacer()
-            Button("Cancel") {
+            Button(L("Cancel")) {
                 app.cancelDiscovery()
                 dismiss()
             }
@@ -791,8 +791,8 @@ struct AddWebsiteSheet: View {
 
     private var planButtonTitle: String {
         switch app.discoveryPhase {
-        case .planning, .done: return "Search Again"
-        default: return "Find Sources"
+        case .planning, .done: return L("Search Again")
+        default: return L("Find Sources")
         }
     }
 
@@ -807,7 +807,7 @@ struct AddWebsiteSheet: View {
                     ProgressView().controlSize(.small)
                     Text("Downloading \(index) of \(total)").font(.system(size: 11, weight: .medium))
                     Spacer()
-                    Button("Cancel") { app.cancelDiscovery() }.controlSize(.small)
+                    Button(L("Cancel")) { app.cancelDiscovery() }.controlSize(.small)
                 }
                 Text(title).font(Design.caption).foregroundStyle(.secondary).lineLimit(1)
                 ProgressView(value: Double(index - 1), total: Double(max(1, total)))
@@ -851,7 +851,7 @@ struct AddWebsiteSheet: View {
                 }
 
                 if plan.selections.isEmpty {
-                    Text("Nothing was selected. Try different wording.")
+                    Text(L("Nothing was selected. Try different wording."))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -966,9 +966,9 @@ struct AddPastedTextSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.spacingMedium) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Paste text")
+                Text(L("Paste text"))
                     .font(.system(size: 15, weight: .semibold))
-                Text("Everything you paste is stored on this Mac and treated as a source with the same citations as any other.")
+                Text(L("Everything you paste is stored on this Mac and treated as a source with the same citations as any other."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -993,8 +993,8 @@ struct AddPastedTextSheet: View {
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Add Text") {
+                Button(L("Cancel")) { dismiss() }
+                Button(L("Add Text")) {
                     onAdd(title.trimmingCharacters(in: .whitespacesAndNewlines), text)
                     dismiss()
                 }
@@ -1020,10 +1020,10 @@ private struct SourceFilterField: ViewModifier {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
-                    TextField("Search sources", text: $text)
+                    TextField(L("Search sources"), text: $text)
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
-                        .accessibilityLabel("Search sources")
+                        .accessibilityLabel(L("Search sources"))
                     if !text.isEmpty {
                         Button {
                             text = ""
@@ -1043,7 +1043,7 @@ private struct SourceFilterField: ViewModifier {
                 content
             }
         } else {
-            content.searchable(text: $text, placement: .toolbar, prompt: "Search sources")
+            content.searchable(text: $text, placement: .toolbar, prompt: L("Search sources"))
         }
     }
 }

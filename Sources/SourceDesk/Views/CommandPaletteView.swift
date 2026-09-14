@@ -56,9 +56,9 @@ struct CommandPaletteView: View {
                             }
                             if items.isEmpty {
                                 VStack(spacing: 4) {
-                                    Text("No matches")
+                                    Text(L("No matches"))
                                         .font(.system(size: 12, weight: .medium))
-                                    Text("Try a notebook name, a source title, or a command like “export”.")
+                                    Text(L("Try a notebook name, a source title, or a command like “export”."))
                                         .font(Design.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -211,31 +211,31 @@ struct CommandPaletteView: View {
 
     private var commands: [Command] {
         var list: [Command] = [
-            Command(title: "New Notebook", symbol: "plus.rectangle.on.folder") {
-                app.createNotebook(title: "Untitled notebook")
+            Command(title: L("New Notebook"), symbol: "plus.rectangle.on.folder") {
+                _ = app.createNotebook(title: L("Untitled notebook"))
             },
-            Command(title: "New Session", symbol: "square.and.pencil") {
+            Command(title: L("New Session"), symbol: "square.and.pencil") {
                 _ = app.createSession()
             },
-            Command(title: "New Note", symbol: "note.text") {
+            Command(title: L("New Note"), symbol: "note.text") {
                 _ = app.createNote()
             },
-            Command(title: "Add Website…", symbol: "globe") {
+            Command(title: L("Add Website…"), symbol: "globe") {
                 NotificationCenter.default.post(name: .addWebsite, object: nil)
             },
-            Command(title: "Add Files…", symbol: "doc.badge.plus") {
+            Command(title: L("Add Files…"), symbol: "doc.badge.plus") {
                 NotificationCenter.default.post(name: .addFiles, object: nil)
             },
-            Command(title: "Paste Text…", symbol: "doc.on.clipboard") {
+            Command(title: L("Paste Text…"), symbol: "doc.on.clipboard") {
                 NotificationCenter.default.post(name: .addPastedText, object: nil)
             },
-            Command(title: "Export Notebook…", symbol: "square.and.arrow.up") {
+            Command(title: L("Export Notebook…"), symbol: "square.and.arrow.up") {
                 NotificationCenter.default.post(name: .exportNotebook, object: nil)
             },
-            Command(title: "Import Notebook…", symbol: "square.and.arrow.down") {
+            Command(title: L("Import Notebook…"), symbol: "square.and.arrow.down") {
                 NotificationCenter.default.post(name: .importNotebook, object: nil)
             },
-            Command(title: "Refresh Model Lists", symbol: "arrow.clockwise") {
+            Command(title: L("Refresh Model Lists"), symbol: "arrow.clockwise") {
                 Task { await app.refreshAllModels() }
             },
             Command(title: "Research & Add Sources…", symbol: "magnifyingglass.circle") {

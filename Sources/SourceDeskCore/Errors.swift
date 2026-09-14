@@ -63,7 +63,7 @@ public enum SourceDeskError: Error, LocalizedError, Equatable, Sendable {
         switch self {
         case .invalidURL(let v): return "“\(v)” is not a valid URL."
         case .notHTTPURL(let v): return "“\(v)” is not an http or https address."
-        case .downloadFailed(let url, let reason): return "The page could not be downloaded: \(url)."
+        case .downloadFailed(let url, _): return "The page could not be downloaded: \(url)."
         case .httpStatus(let url, let status): return "The server returned HTTP \(status) for \(url)."
         case .requestTimedOut(let url, let seconds): return "The request to \(url) timed out after \(Int(seconds))s."
         case .robotsDisallowed(let url): return "\(url) is disallowed by the site's robots.txt."
@@ -81,7 +81,7 @@ public enum SourceDeskError: Error, LocalizedError, Equatable, Sendable {
         case .archiveCorrupt(let detail): return "The archive could not be read: \(detail)."
         case .noSources(let notebook): return "“\(notebook)” has no sources yet."
         case .insufficientContext(let q): return "Not enough relevant source material was found to answer “\(Self.clip(q))”."
-        case .contextTooLarge(let model, let needed, let limit): return "\(model) cannot hold this request."
+        case .contextTooLarge(let model, _, _): return "\(model) cannot hold this request."
         case .embeddingModelUnavailable(let model, let reason): return "The embedding model “\(model)” is unavailable: \(reason)."
         case .vectorSearchUnavailable(let reason): return "Semantic search is unavailable: \(reason)."
         case .noLocalModelConfigured: return "No local model is available."
@@ -92,11 +92,11 @@ public enum SourceDeskError: Error, LocalizedError, Equatable, Sendable {
         case .providerUnavailable(let provider, let reason): return "\(provider) is unavailable: \(reason)."
         case .providerRateLimited(let provider, _): return "\(provider) is rate limiting this Mac."
         case .providerRejected(let provider, let status, let message): return "\(provider) returned HTTP \(status): \(message)"
-        case .emptyModelResponse(let provider, let model): return "\(provider) returned an empty response from “\(model)”."
+
         case .cloudDisabled(let reason): return "Cloud models are turned off: \(reason)"
         case .modelDoesNotSupportEmbeddings(let provider, let model): return "\(provider) model “\(model)” cannot produce embeddings."
-        case .emptyModelResponse(let provider, _):
-            return "Check that “\(provider)” is running, that the model is loaded, and that its context window is large enough for the retrieved passages. Lowering the context budget in Settings → Retrieval can help."
+        case .emptyModelResponse(let provider, let model):
+            return "\(provider) returned an empty response from “\(model)”. Check that the model is loaded and that its context window is large enough for the retrieved passages; lowering the context budget in Settings → Retrieval can help."
         case .searchProviderNotConfigured(let provider): return "\(provider) is selected but not configured."
         case .webSearchUnavailable(let provider, let reason): return "Web search via \(provider) is unavailable: \(reason)."
         case .noSearchResults(let query): return "The web search for “\(Self.clip(query))” returned no usable results."
@@ -151,7 +151,7 @@ public enum SourceDeskError: Error, LocalizedError, Equatable, Sendable {
             return "Open the page in a browser, use Reader Mode, and import it as pasted text or a PDF."
         case .emptyExtraction:
             return "The page may be an image gallery or empty. Try a different URL or paste the text manually."
-        case .offline(let feature):
+        case .offline(_):
             return "Reconnect to the internet, or switch this notebook to local sources only."
         case .cancelled: return nil
         case .unsupportedDocument:

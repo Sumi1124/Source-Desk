@@ -2,6 +2,8 @@
 
 # SourceDesk
 
+[日本語の README はこちら](README.ja.md)
+
 A local-first AI research notebook for macOS. Collect sources — websites, PDFs,
 documents, pasted text — keep everything on your Mac, and ask questions that are
 answered from your material **with citations you can inspect**.
@@ -96,6 +98,10 @@ universal binary.
   and flashcard output is structured, so the app can run them interactively.
 - **Open export format.** Notebooks export to a plain `.nbk` zip you can read with
   `unzip` and any text editor.
+- **English and Japanese.** Switch the interface in Settings → Appearance → **Interface
+  Language** (System, English, or 日本語). It applies immediately — no relaunch — and
+  follows the Mac's own language by default. Untranslated strings fall back to English
+  rather than showing a raw key.
 
 ## Screenshots
 
@@ -339,6 +345,38 @@ parsing, zip archives and SHA-256 are implemented in the repository (PDF text
 extraction goes through Apple's PDFKit), which is why the app builds offline
 and has no supply chain to audit.
 
+### Signing and notarization
+
+The released app is **ad-hoc signed**, not signed with a Developer ID, so macOS shows a
+first-launch dialog (see [Download](#download)). That is a deliberate limitation, not an
+oversight: a Developer ID certificate is issued by Apple to a paid Developer Program
+account and binds the app to a verified legal identity. Gatekeeper validates the signature
+against Apple's certificate chain, so a locally generated certificate would be rejected
+exactly as the ad-hoc one is — it would not remove the warning.
+
+`scripts/sign_and_notarize.sh` does the real thing when credentials exist, and otherwise
+prints exactly what is missing and how to supply it:
+
+```bash
+scripts/sign_and_notarize.sh                    # signs if a Developer ID is present
+SOURCEDESK_NOTARIZE=1 scripts/sign_and_notarize.sh   # signs, notarizes, staples
+```
+
+CI signs and notarizes automatically once these repository secrets are set — no code
+change needed:
+
+| Secret | What it is |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | base64 of a `.p12` exported from Keychain Access |
+| `MACOS_CERTIFICATE_PASSWORD` | that export's password |
+| `MACOS_KEYCHAIN_PASSWORD` | any value; used for a temporary CI keychain |
+| `MACOS_NOTARY_APPLE_ID` | the Apple ID, to also notarize |
+| `MACOS_NOTARY_TEAM_ID` | the team identifier |
+| `MACOS_NOTARY_PASSWORD` | an app-specific password from appleid.apple.com |
+
+Without the certificate the CI step says so and continues; it never reports that it signed
+when it did not.
+
 ### Testing
 
 ```bash
@@ -382,14 +420,14 @@ export → import → answer again).
 real model or a live network skip with a reason, and the summary prints them separately:
 
 ```
-PASS  28 suites · 262 tests · 1421 assertions · 0 failures · 258 verified
+PASS  29 suites · 269 tests · 1440 assertions · 0 failures · 265 verified
 
 NOT VERIFIED (4 — these could not run in this environment):
   ~ 20 · Live local model → a real model answers from the sources and cites them
       no local Ollama model is installed, so grounded answering with a real model is unproven
 ```
 
-`258 verified` is a different claim from `0 failures`:
+`265 verified` is a different claim from `0 failures`:
 most of the pipeline is tested with a stub provider, which says nothing about whether a
 real model, given real retrieved passages, actually answers from them. Suite 20 answers
 that question against **whatever Ollama has installed** — including the

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for a Developer ID (non-App-Store) build.
+
+  Deliberately minimal, and the omissions are the point. SourceDesk needs no sandbox
+  container, no camera, no microphone, no location, no contacts, no network extension —
+  so it asks for none of them. A tool that reads the user's own documents and talks to a
+  model on their own machine should request the narrowest possible set of capabilities.
+
+  The one entry is the hardened-runtime exemption Apple requires for an app that must
+  connect to a plain-HTTP address: users may point a provider at a local server such as
+  http://127.0.0.1:11434, and the hardened runtime blocks that without this.
+
+  `com.apple.security.cs.allow-jit` is NOT set. SourceDesk does not ship a JavaScript
+  engine or generate code at runtime, so it has no reason to weaken the runtime.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <false/>
+</dict>
+</plist>

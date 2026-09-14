@@ -33,16 +33,16 @@ public enum SourceKind: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .website: return "Website"
-        case .pdf: return "PDF"
-        case .plainText: return "Text"
-        case .markdown: return "Markdown"
-        case .html: return "HTML"
-        case .docx: return "Word"
-        case .rtf: return "Rich Text"
-        case .epub: return "EPUB"
-        case .pastedText: return "Pasted Text"
-        case .folder: return "Folder"
+        case .website: return L("Website")
+        case .pdf: return L("PDF")
+        case .plainText: return L("Text")
+        case .markdown: return L("Markdown")
+        case .html: return L("HTML")
+        case .docx: return L("Word")
+        case .rtf: return L("Rich Text")
+        case .epub: return L("EPUB")
+        case .pastedText: return L("Pasted Text")
+        case .folder: return L("Folder")
         }
     }
 
@@ -93,15 +93,15 @@ public enum SourceStatus: String, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .queued: return "Queued"
-        case .fetching: return "Downloading"
-        case .extracting: return "Extracting"
-        case .chunking: return "Chunking"
-        case .embedding: return "Embedding"
-        case .ready: return "Ready"
-        case .partial: return "Partial"
-        case .failed: return "Failed"
-        case .cancelled: return "Cancelled"
+        case .queued: return L("Queued")
+        case .fetching: return L("Downloading")
+        case .extracting: return L("Extracting")
+        case .chunking: return L("Chunking")
+        case .embedding: return L("Embedding")
+        case .ready: return L("Ready")
+        case .partial: return L("Partial")
+        case .failed: return L("Failed")
+        case .cancelled: return L("Cancelled")
         }
     }
 }
@@ -115,17 +115,17 @@ public enum PrivacyLevel: String, Codable, Sendable {
 
     public var label: String {
         switch self {
-        case .local: return "Stays on this Mac"
-        case .cloud: return "Sent to your AI provider"
-        case .web: return "Sent to your search provider"
+        case .local: return L("Stays on this Mac")
+        case .cloud: return L("Sent to your AI provider")
+        case .web: return L("Sent to your search provider")
         }
     }
 
     public var detail: String {
         switch self {
-        case .local: return "Your source stays on this Mac."
-        case .cloud: return "This source content may be sent to the selected AI provider."
-        case .web: return "This query is sent to the selected search provider."
+        case .local: return L("Your source stays on this Mac.")
+        case .cloud: return L("This source content may be sent to the selected AI provider.")
+        case .web: return L("This query is sent to the selected search provider.")
         }
     }
 }
@@ -377,17 +377,17 @@ public enum AnswerScope: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .notebookSources: return "Notebook only"
-        case .notebookAndWeb: return "Notebook + Web"
-        case .webOnly: return "Web only"
+        case .notebookSources: return L("Notebook only")
+        case .notebookAndWeb: return L("Notebook + Web")
+        case .webOnly: return L("Web only")
         }
     }
 
     public var shortName: String {
         switch self {
-        case .notebookSources: return "Sources"
-        case .notebookAndWeb: return "Sources + Web"
-        case .webOnly: return "Web"
+        case .notebookSources: return L("Sources")
+        case .notebookAndWeb: return L("Sources + Web")
+        case .webOnly: return L("Web")
         }
     }
 
@@ -402,11 +402,11 @@ public enum AnswerScope: String, Codable, CaseIterable, Sendable {
     public var explanation: String {
         switch self {
         case .notebookSources:
-            return "Answers use only the sources in this notebook. Nothing is sent anywhere except your selected model."
+            return L("Answers use only the sources in this notebook. Nothing is sent anywhere except your selected model.")
         case .notebookAndWeb:
-            return "Answers use this notebook's sources plus live web results. Web results are labelled separately and every query is sent to your search provider."
+            return L("Answers use this notebook's sources plus live web results. Web results are labelled separately and every query is sent to your search provider.")
         case .webOnly:
-            return "Answers ignore this notebook and use live web results only."
+            return L("Answers ignore this notebook and use live web results only.")
         }
     }
 
@@ -512,8 +512,8 @@ public enum CitationKind: String, Codable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .notebook: return "Source"
-        case .web: return "Web"
+        case .notebook: return L("Source")
+        case .web: return L("Web")
         }
     }
 
@@ -687,18 +687,18 @@ public enum NoteKind: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .manual: return "Note"
-        case .summary: return "Summary"
-        case .keyPoints: return "Key Points"
-        case .timeline: return "Timeline"
-        case .faq: return "FAQ"
-        case .quiz: return "Quiz"
-        case .flashcards: return "Flashcards"
-        case .studyGuide: return "Study Guide"
-        case .outline: return "Outline"
-        case .quotations: return "Quotations"
-        case .comparison: return "Source Comparison"
-        case .briefing: return "Briefing"
+        case .manual: return L("Note")
+        case .summary: return L("Summary")
+        case .keyPoints: return L("Key Points")
+        case .timeline: return L("Timeline")
+        case .faq: return L("FAQ")
+        case .quiz: return L("Quiz")
+        case .flashcards: return L("Flashcards")
+        case .studyGuide: return L("Study Guide")
+        case .outline: return L("Outline")
+        case .quotations: return L("Quotations")
+        case .comparison: return L("Source Comparison")
+        case .briefing: return L("Briefing")
         }
     }
 
@@ -826,9 +826,9 @@ public enum AppearanceMode: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .system: return "System"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .system: return L("System")
+        case .light: return L("Light")
+        case .dark: return L("Dark")
         }
     }
 }
@@ -840,20 +840,20 @@ public enum EmbeddingChoice: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .builtIn: return "Built-in (hashing)"
-        case .ollama: return "Local model (Ollama)"
-        case .disabled: return "Off (keyword search only)"
+        case .builtIn: return L("Built-in (hashing)")
+        case .ollama: return L("Local model (Ollama)")
+        case .disabled: return L("Off (keyword search only)")
         }
     }
 
     public var explanation: String {
         switch self {
         case .builtIn:
-            return "Deterministic 384-dimension lexical vectors computed on this Mac. No model download, instant, and never leaves the machine."
+            return L("Deterministic 384-dimension lexical vectors computed on this Mac. No model download, instant, and never leaves the machine.")
         case .ollama:
-            return "Uses an embedding model served by your local Ollama install, for example nomic-embed-text. Better semantic recall, needs the model pulled once."
+            return L("Uses an embedding model served by your local Ollama install, for example nomic-embed-text. Better semantic recall, needs the model pulled once.")
         case .disabled:
-            return "Only keyword and metadata search run. Answers still work; recall is narrower."
+            return L("Only keyword and metadata search run. Answers still work; recall is narrower.")
         }
     }
 }
@@ -865,17 +865,17 @@ public enum RerankStrategy: String, Codable, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .none: return "Off"
-        case .lexical: return "Lexical (built-in)"
-        case .model: return "Cross-encoder (local model)"
+        case .none: return L("Off")
+        case .lexical: return L("Lexical (built-in)")
+        case .model: return L("Cross-encoder (local model)")
         }
     }
 
     public var explanation: String {
         switch self {
-        case .none: return "Use fused retrieval order as-is. Fastest."
-        case .lexical: return "Re-scores the top candidates using term coverage and phrase proximity. No model needed."
-        case .model: return "Asks the selected local chat model to rank candidates. Slowest, best precision. Falls back to lexical if the model is offline."
+        case .none: return L("Use fused retrieval order as-is. Fastest.")
+        case .lexical: return L("Re-scores the top candidates using term coverage and phrase proximity. No model needed.")
+        case .model: return L("Asks the selected local chat model to rank candidates. Slowest, best precision. Falls back to lexical if the model is offline.")
         }
     }
 }

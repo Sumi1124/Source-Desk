@@ -81,7 +81,7 @@ struct ResearchView: View {
 
             Spacer(minLength: Design.spacingSmall)
 
-            Picker("Answer source", selection: $scope) {
+            Picker(L("Answer source"), selection: $scope) {
                 ForEach(AnswerScope.allCases, id: \.self) { value in
                     Text(value.shortName).tag(value)
                 }
@@ -103,11 +103,11 @@ struct ResearchView: View {
 
             Menu {
                 if let session {
-                    Button("Rename Session…") {
+                    Button(L("Rename Session…")) {
                         NotificationCenter.default.post(name: .renameSession, object: session.id)
                     }
                 }
-                Button("New Session") { createSession() }
+                Button(L("New Session")) { createSession() }
                 Divider()
                 ForEach(app.sessions) { item in
                     Button(item.title) {
@@ -283,7 +283,7 @@ struct ResearchView: View {
                 )
 
                 if chat.isStreaming {
-                    Button("Stop") { chat.cancel() }
+                    Button(L("Stop")) { chat.cancel() }
                         .buttonStyle(.bordered)
                         .controlSize(.large)
                         .keyboardShortcut(".", modifiers: .command)
@@ -291,7 +291,7 @@ struct ResearchView: View {
                     Button {
                         submit()
                     } label: {
-                        Label("Ask", systemImage: "arrow.up.circle.fill")
+                        Label(L("Ask"), systemImage: "arrow.up.circle.fill")
                             .labelStyle(.titleAndIcon)
                     }
                     .buttonStyle(.borderedProminent)
@@ -305,7 +305,7 @@ struct ResearchView: View {
             if scope == .notebookSources && app.settings.searchEngine != .none && !app.isOnline {
                 HStack(spacing: 4) {
                     Image(systemName: "wifi.slash").font(.system(size: 9))
-                    Text("Offline: answers use your saved sources and (if selected) a local model.")
+                    Text(L("Offline: answers use your saved sources and (if selected) a local model."))
                         .font(Design.caption)
                     Spacer()
                 }
@@ -319,9 +319,9 @@ struct ResearchView: View {
 
     private var composerPlaceholder: String {
         switch scope {
-        case .notebookSources: return "Ask about your sources…"
-        case .notebookAndWeb: return "Ask using your sources and the web…"
-        case .webOnly: return "Search the web…"
+        case .notebookSources: return L("Ask about your sources…")
+        case .notebookAndWeb: return L("Ask using your sources and the web…")
+        case .webOnly: return L("Search the web…")
         }
     }
 
@@ -739,7 +739,7 @@ struct CitationChip: View {
     }
 
     private var helpText: String {
-        guard let citation else { return "This marker did not resolve to a retrieved passage." }
+        guard let citation else { return L("This marker did not resolve to a retrieved passage.") }
         var parts = [citation.title]
         if let page = citation.pageNumber { parts.append("page \(page)") }
         if let url = citation.url { parts.append(url) }
@@ -755,7 +755,7 @@ struct CitationList: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            SectionHeader("Sources used")
+            SectionHeader(L("Sources used"))
             ForEach(citations) { citation in
                 Button {
                     app.activeCitations = [citation]
@@ -848,7 +848,7 @@ struct StreamingAnswerView: View {
                             .textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } label: {
-                        Text("Model reasoning")
+                        Text(L("Model reasoning"))
                             .font(Design.caption)
                             .foregroundStyle(.secondary)
                     }

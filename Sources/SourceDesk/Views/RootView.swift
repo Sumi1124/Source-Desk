@@ -16,7 +16,16 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var app = app
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        // Re-identified when the language changes so SwiftUI rebuilds the whole interface
+        // against the new table. `.id` rather than a conditional, because the views below
+        // cache nothing and a rebuild is cheap and always correct.
+        content
+            .id(app.languageRevision)
+    }
+
+    private var content: some View {
+        @Bindable var app = app
+        return NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 onAddWebsite: { addWebsiteVisible = true },
                 onAddFiles: { presentFileImporter() },
@@ -374,11 +383,11 @@ struct ModelMenu: View {
                 }
             }
             Divider()
-            Button("Refresh Model Lists") {
+            Button(L("Refresh Model Lists")) {
                 Task { await app.refreshAllModels() }
             }
             SettingsLink {
-                Text("AI Provider Settings…")
+                Text(L("AI Provider Settings…"))
             }
         } label: {
             HStack(spacing: 6) {
@@ -465,7 +474,7 @@ struct NetworkIndicator: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if app.settings.localOnlyMode {
                     Divider()
-                    Label("Local-Only Mode is on: cloud providers are disabled.", systemImage: "lock.fill")
+                    Label(L("Local-Only Mode is on: cloud providers are disabled."), systemImage: "lock.fill")
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                         .frame(width: 280, alignment: .leading)
@@ -492,7 +501,7 @@ struct CloudConsentSheet: View {
                     .font(.system(size: 14, weight: .semibold))
             }
 
-            Text("To answer from your sources, SourceDesk sends the passages it retrieved — not your whole library — to the selected provider. Your notebook, files and database stay on this Mac.")
+            Text(L("To answer from your sources, SourceDesk sends the passages it retrieved — not your whole library — to the selected provider. Your notebook, files and database stay on this Mac."))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -500,14 +509,14 @@ struct CloudConsentSheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 let passageCount = (try? app.store?.chunkCount(notebookID: app.selectedNotebookID ?? "")) ?? 0
                 Label("This notebook has \(Format.count(app.sources.count, "source")), \(Format.count(passageCount, "passage")).", systemImage: "doc.on.doc")
-                Label("Approval applies to this notebook only.", systemImage: "checkmark.shield")
-                Label("You can revoke it at any time in Settings → Privacy.", systemImage: "lock.rotation")
+                Label(L("Approval applies to this notebook only."), systemImage: "checkmark.shield")
+                Label(L("You can revoke it at any time in Settings → Privacy."), systemImage: "lock.rotation")
             }
             .font(Design.caption)
             .foregroundStyle(.secondary)
 
             HStack {
-                Button("Use a local model instead") {
+                Button(L("Use a local model instead")) {
                     let local = app.providers.localProviders.first
                     if let local {
                         app.updateSettings { $0.preferredProviderID = local.identifier }
@@ -515,8 +524,8 @@ struct CloudConsentSheet: View {
                     dismiss()
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Approve for this notebook") {
+                Button(L("Cancel")) { dismiss() }
+                Button(L("Approve for this notebook")) {
                     if let id = app.cloudConsentPromptNotebookID {
                         app.approveCloudConsent(for: id)
                     }

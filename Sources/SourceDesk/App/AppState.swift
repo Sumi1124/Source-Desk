@@ -25,6 +25,10 @@ public final class AppState {
     var sessions: [ChatSession] = []
     var notes: [NotebookNote] = []
 
+    /// Incremented whenever the interface language changes, so the root view can be
+    /// re-identified and rebuilt. Observable purely to drive that redraw.
+    var languageRevision = 0
+
     var selectedNotebookID: RecordID?
 
     /// True while the welcome flow is on screen. Presented as a sheet from the root view.
@@ -42,11 +46,11 @@ public final class AppState {
         var id: String { rawValue }
         var displayName: String {
             switch self {
-            case .research: return "Research"
-            case .sources: return "Sources"
-            case .notes: return "Notes"
-            case .studyTools: return "Study Tools"
-            case .search: return "Search"
+            case .research: return L("Research")
+            case .sources: return L("Sources")
+            case .notes: return L("Notes")
+            case .studyTools: return L("Study Tools")
+            case .search: return L("Search")
             }
         }
         var symbolName: String {
@@ -79,6 +83,21 @@ public final class AppState {
     var isGenerating = false
     var generationStage: AnswerEngine.Stage?
     var statusMessage: String?
+
+    /// Masked hints for every stored credential, read once at start-up.
+    ///
+    /// Views read this instead of the Keychain. The Keychain must not be touched during
+    /// layout: `SecItemCopyMatching` takes a process-wide lock, and two SwiftUI bodies
+    /// reading it concurrently deadlocked the app inside the Security framework — the window
+    /// froze with no dialog, no error, and no way out. One read before any window exists
+    /// removes the possibility entirely.
+    private(set) var credentialHints: [String: String] = [:]
+
+    /// Re-reads the credential hints. Called at start-up and after any change to a key,
+    /// always off the layout path.
+    func refreshCredentialHints() {
+        credentialHints = KeychainService.maskedHints()
+    }
     var lastError: PresentedError?
 
     /// Banners and one-time confirmations.
@@ -148,6 +167,11 @@ public final class AppState {
             let settingsStore = SettingsStore(store: store)
             self.settingsStore = settingsStore
             self.settings = settingsStore.load()
+            // Applying the language before any view is built means the first frame is already
+            // in the chosen language, rather than flashing English and then switching.
+            Localizer.shared.setLanguage(settings.language)
+            // Read the Keychain once, before any window exists — see credentialHints.
+            refreshCredentialHints()
             self.providers = makeProviders()
             DiagnosticsLog.shared.configure(level: settings.logLevel, directory: paths.logsRoot)
             DiagnosticsLog.shared.info("Opened library at \(paths.root.path)", category: "lifecycle")
@@ -379,7 +403,7 @@ public final class AppState {
         activeCitations = []
         activeTrace = nil
         if let store, let notebook = try? store.notebook(id: id) {
-            try? store.touchNotebook(id: id, opened: true)
+            _ = try? store.touchNotebook(id: id, opened: true)
             statusMessage = notebook.summary.isEmpty ? nil : notebook.summary
         }
         reloadNotebooks()
@@ -410,7 +434,7 @@ public final class AppState {
         guard let store else { return }
         var copy = notebook
         copy.title = title
-        try? store.upsert(notebook: copy)
+        _ = try? store.upsert(notebook: copy)
         reloadNotebooks()
     }
 
@@ -436,9 +460,9 @@ public final class AppState {
     }
 
     func setDefaultScope(_ scope: AnswerScope) {
-        guard let store, let id = selectedNotebookID, var notebook = selectedNotebook else { return }
+        guard let store, selectedNotebookID != nil, var notebook = selectedNotebook else { return }
         notebook.defaultScope = scope
-        try? store.upsert(notebook: notebook)
+        _ = try? store.upsert(notebook: notebook)
         reloadNotebooks()
     }
 
@@ -479,8 +503,8 @@ public final class AppState {
         var label: String {
             switch self {
             case .idle: return ""
-            case .searching: return "Searching DuckDuckGo…"
-            case .askingAI: return "Asking the model which results are relevant…"
+            case .searching: return L("Searching DuckDuckGo…")
+            case .askingAI: return L("Asking the model which results are relevant…")
             case .planning(let kept, let searched):
                 return "Selected \(Format.count(kept, "result")) of \(Format.count(searched, "result"))"
             case .fetching(let index, let total, _):
@@ -518,10 +542,10 @@ public final class AppState {
     /// Why discovery cannot run, phrased for the user.
     var discoveryUnavailableReason: String? {
         if searchProvider == nil || settings.searchEngine == .none {
-            return "Search is switched off. Choose a search provider in Settings → Search."
+            return L("Search is switched off. Choose a search provider in Settings → Search.")
         }
         if currentProvider == nil {
-            return "No AI model is selected. Choose one in the toolbar."
+            return L("No AI model is selected. Choose one in the toolbar.")
         }
         if let provider = currentProvider, settings.model(for: provider.identifier).isEmpty {
             return "\(provider.displayName) has no model chosen. Pick one in the toolbar."
@@ -651,17 +675,17 @@ public final class AppState {
 
         var title: String {
             switch self {
-            case .addSources: return "Research & Add Sources"
-            case .createNote: return "Research & Create Note"
+            case .addSources: return L("Research & Add Sources")
+            case .createNote: return L("Research & Create Note")
             }
         }
 
         var prompt: String {
             switch self {
             case .addSources:
-                return "Enter a topic. SourceDesk searches the web, then downloads and indexes the top results as sources you can cite."
+                return L("Enter a topic. SourceDesk searches the web, then downloads and indexes the top results as sources you can cite.")
             case .createNote:
-                return "Enter a topic. SourceDesk searches the web, adds the top results as sources, then writes a summary note from them."
+                return L("Enter a topic. SourceDesk searches the web, adds the top results as sources, then writes a summary note from them.")
             }
         }
 
@@ -730,7 +754,7 @@ public final class AppState {
         }
 
         let count = min(max(1, resultCount), 20)
-        let chunking = settings.chunkingConfiguration
+        _ = settings.chunkingConfiguration
 
         // Returned so the caller can cancel or await it; the UI keeps a handle so a
         // long run over many pages can be stopped.
@@ -919,7 +943,7 @@ public final class AppState {
         guard let store else { return }
         var copy = source
         copy.includeInRetrieval.toggle()
-        try? store.upsert(source: copy)
+        _ = try? store.upsert(source: copy)
         reloadNotebookContent()
     }
 
@@ -959,7 +983,7 @@ public final class AppState {
     }
 
     func deleteAllSources() {
-        guard let store, let id = selectedNotebookID else { return }
+        guard let store, selectedNotebookID != nil else { return }
         let ids = sources.map(\.id)
         do {
             try store.deleteSources(ids: ids)
@@ -1044,7 +1068,7 @@ public final class AppState {
     /// A short, honest description of what the selected model means for privacy and
     /// capability, shown above the composer.
     var modelStatusLine: String {
-        guard let provider = currentProvider else { return "No provider selected" }
+        guard let provider = currentProvider else { return L("No provider selected") }
         let model = currentModelName.isEmpty ? "no model selected" : currentModelName
         if provider.isLocal {
             return "\(provider.displayName) · \(model) — runs on this Mac"
@@ -1066,8 +1090,16 @@ public final class AppState {
     }
 
     func updateSettings(_ mutate: (inout AppSettings) -> Void) {
-        var previous = settings
+        let previous = settings
         mutate(&settings)
+        // A language change must take effect on the next frame, not the next launch.
+        if settings.language != previous.language {
+            Localizer.shared.setLanguage(settings.language)
+            // Bumping this re-identifies the root view, which forces the whole interface to
+            // rebuild against the new table. Without it, SwiftUI keeps the existing view
+            // bodies and the switch appears to do nothing.
+            languageRevision += 1
+        }
         do {
             try settingsStore?.save(settings)
         } catch let error as SourceDeskError {
@@ -1116,7 +1148,7 @@ public final class AppState {
 
     func deleteNote(_ id: RecordID) {
         guard let store else { return }
-        try? store.deleteNote(id: id)
+        _ = try? store.deleteNote(id: id)
         if selectedNoteID == id { selectedNoteID = nil }
         reloadNotebookContent()
     }
@@ -1153,7 +1185,7 @@ public final class AppState {
 
     func deleteSession(_ id: RecordID) {
         guard let store else { return }
-        try? store.deleteSession(id: id)
+        _ = try? store.deleteSession(id: id)
         if selectedSessionID == id { selectedSessionID = nil }
         activeCitations = []
         activeTrace = nil
@@ -1168,7 +1200,7 @@ public final class AppState {
         guard let store else { return }
         var copy = session
         copy.title = title
-        try? store.upsert(session: copy)
+        _ = try? store.upsert(session: copy)
         reloadNotebookContent()
     }
 
@@ -1176,7 +1208,7 @@ public final class AppState {
         guard let store else { return }
         var copy = session
         copy.scope = scope
-        try? store.upsert(session: copy)
+        _ = try? store.upsert(session: copy)
         reloadNotebookContent()
     }
 

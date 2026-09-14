@@ -7,6 +7,10 @@ import SourceDeskCore
 ///   SOURCEDESK_SEED_ROOT=/tmp/sd-demo swift run SourceDeskHarness --seed-demo
 public enum DemoSeed {
 
+    /// The fixed instant every demo date is computed from, so screenshots show the same
+    /// relative ages on every run. The renderer pins `Format.referenceNow` to this value.
+    public static let demoNow = Date(timeIntervalSince1970: 1_787_000_000)
+
     /// Fills a library with realistic demo content.
     ///
     /// - Parameter root: the library folder. Defaults to `$SOURCEDESK_SEED_ROOT`, or
@@ -24,7 +28,7 @@ public enum DemoSeed {
 
         // Relative ages are fixed rather than random: these values are screenshotted, and a
         // random spread produced a different "added" age on every run.
-        let demoNow = Date(timeIntervalSince1970: 1_787_000_000)
+        let demoNow = Self.demoNow
 
         // Two notebooks, so the sidebar shows structure.
         let primary = try store.upsert(notebook: Notebook(

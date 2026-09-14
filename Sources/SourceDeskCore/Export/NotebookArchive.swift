@@ -383,7 +383,7 @@ public enum NotebookArchive {
                 let path = prefix.isEmpty ? contentFile : "\(prefix)/\(contentFile)"
                 if let data = try? archive.data(for: path) {
                     let destination = store.paths.extractedTextURL(for: newID)
-                    try? FileStore.write(data, to: destination)
+                    _ = try? FileStore.write(data, to: destination)
                     source.contentPath = destination.path
                 } else {
                     skipped.append((source.title, "extracted text missing from the archive"))
@@ -396,7 +396,7 @@ public enum NotebookArchive {
                 if let data = try? archive.data(for: path) {
                     let name = (originalFile as NSString).lastPathComponent
                     let destination = store.paths.originalFileURL(for: newID, fileName: name)
-                    try? FileStore.write(data, to: destination)
+                    _ = try? FileStore.write(data, to: destination)
                     source.filePath = destination.path
                 }
             }
@@ -436,7 +436,7 @@ public enum NotebookArchive {
                 source.status = .failed
                 source.errorMessage = error.errorDescription
                 source.errorRecovery = error.recoverySuggestion
-                try? store.upsert(source: source)
+                _ = try? store.upsert(source: source)
                 skipped.append((source.title, error.errorDescription ?? "could not be written"))
             }
 

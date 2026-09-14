@@ -350,9 +350,9 @@ struct PrivacyNotice: View {
     private var text: String {
         if let detailOverride { return detailOverride }
         switch level {
-        case .local: return "Local: your sources stay on this Mac."
+        case .local: return L("Local: your sources stay on this Mac.")
         case .cloud: return providerName.map { "Cloud: content you send is processed by \($0)." } ?? PrivacyLevel.cloud.detail
-        case .web: return "Web: this query is sent to your search provider."
+        case .web: return L("Web: this query is sent to your search provider.")
         }
     }
 }

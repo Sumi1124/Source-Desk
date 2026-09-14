@@ -288,7 +288,7 @@ public struct StudyToolsService: Sendable {
             payload: payload
         )
         try store.upsert(note: note)
-        try? store.touchNotebook(id: notebookID)
+        _ = try? store.touchNotebook(id: notebookID)
 
         emit(.stage("Done"))
         return Outcome(

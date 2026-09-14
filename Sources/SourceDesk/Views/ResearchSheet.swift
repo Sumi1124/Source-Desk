@@ -29,7 +29,7 @@ struct ResearchSheet: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Close")
-                .help("Close")
+                .help(L("Close"))
             }
 
             Text(kind.prompt)
@@ -43,10 +43,10 @@ struct ResearchSheet: View {
                 .onSubmit { submit() }
 
             HStack(spacing: Design.spacingSmall) {
-                Text("Sources to add")
+                Text(L("Sources to add"))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
-                Picker("Sources to add", selection: $sourceCount) {
+                Picker(L("Sources to add"), selection: $sourceCount) {
                     ForEach([3, 5, 8, 12], id: \.self) { count in
                         Text("\(count)").tag(count)
                     }
@@ -58,17 +58,16 @@ struct ResearchSheet: View {
 
             // Say what will happen before it happens: this one sends the topic to a
             // search provider, and each result is downloaded.
-            Label("Searches the web with your configured search provider. Nothing is sent to an AI provider until you ask a question.",
-                  systemImage: "globe")
+            Label(L("Searches the web with your configured search provider. Nothing is sent to an AI provider until you ask a question."), systemImage: "globe")
                 .font(.system(size: 10))
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: Design.spacingSmall) {
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button(L("Cancel")) { dismiss() }
                     .keyboardShortcut(.cancelAction)
-                Button("Start Research") { submit() }
+                Button(L("Start Research")) { submit() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(trimmed.isEmpty)
             }

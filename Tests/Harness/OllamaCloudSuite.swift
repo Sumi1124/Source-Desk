@@ -194,7 +194,7 @@ enum OllamaCloudSuite {
 
                 let limited = map("rate limit exceeded, please try again later")
                 try ctx.contains(limited.errorDescription ?? "", "rate limiting")
-                let rateLimited = try ctx.unwrap(limited as? SourceDeskError)
+                let rateLimited = limited
                 try ctx.contains(rateLimited.recoverySuggestion ?? "", "local model")
 
                 // Anything unrecognised still reaches the user verbatim.

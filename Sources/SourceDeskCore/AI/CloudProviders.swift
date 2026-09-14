@@ -52,7 +52,7 @@ public struct KeychainService: KeychainReading, Sendable {
     // MARK: Reading
 
     public func secret(for key: String) -> String? {
-        var query: [String: Any] = [
+        let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Self.service,
             kSecAttrAccount as String: key,
@@ -69,6 +69,39 @@ public struct KeychainService: KeychainReading, Sendable {
     public func secret(for key: Key) -> String? { secret(for: key.rawValue) }
 
     public func hasSecret(for key: Key) -> Bool { secret(for: key) != nil }
+
+    /// Every stored entry as a masked hint, in one pass.
+    ///
+    /// This exists so no view ever calls the Keychain while it is laying out. Doing that
+    /// deadlocked the app: `SecItemCopyMatching` takes a process-wide lock, and when two
+    /// SwiftUI bodies read it concurrently during layout both threads blocked on each other
+    /// inside the Security framework, freezing the window with no way out. Reading once,
+    /// before any window exists, avoids the whole class of problem.
+    ///
+    /// Only the mask is returned — never the secret itself — so nothing new is exposed.
+    public static func maskedHints() -> [String: String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Self.service,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true
+        ]
+        var items: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &items) == errSecSuccess,
+              let entries = items as? [[String: Any]] else { return [:] }
+
+        var hints: [String: String] = [:]
+        for entry in entries {
+            guard let account = entry[kSecAttrAccount as String] as? String,
+                  let data = entry[kSecValueData as String] as? Data else { continue }
+            let value = String(decoding: data, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { continue }
+            hints[account] = value.count <= 8 ? "••••" : "••••" + value.suffix(4)
+        }
+        return hints
+    }
 
     /// What the UI shows instead of the secret: enough to recognise the key,
     /// never enough to use it.

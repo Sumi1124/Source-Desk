@@ -339,7 +339,7 @@ public struct SourceIngestionService: Sendable {
             if let existing, existing.id != source.id {
                 // Only reclaim a placeholder that has nothing stored against it.
                 if existing.chunkCount > 0 || existing.contentPath != nil {
-                    try? store.deleteSource(id: source.id)
+                    _ = try? store.deleteSource(id: source.id)
                     source = existing
                     source.status = .fetching
                     source.statusDetail = "Refreshing"
@@ -535,14 +535,14 @@ public struct SourceIngestionService: Sendable {
         source.pageCount = document.pageCount
         source.checksum = FileStore.checksum(of: Data(plainText.utf8))
         if let payload = originalPayload, !originalFileName.isEmpty {
-            try? FileStore.write(payload, to: store.paths.originalFileURL(for: source.id, fileName: originalFileName))
+            _ = try? FileStore.write(payload, to: store.paths.originalFileURL(for: source.id, fileName: originalFileName))
         }
 
         if Task.isCancelled {
             source.status = .cancelled
             source.statusDetail = "Cancelled"
             source = (try? store.upsert(source: source)) ?? source
-            try? store.replaceChunks(sourceID: source.id, notebookID: notebookID, chunks: [], embeddings: [])
+            _ = try? store.replaceChunks(sourceID: source.id, notebookID: notebookID, chunks: [], embeddings: [])
             return Result(source: source, chunkCount: 0, embeddingCount: 0, error: .cancelled, notices: [])
         }
 
@@ -597,7 +597,7 @@ public struct SourceIngestionService: Sendable {
         source.errorRecovery = nil
         source.updatedAt = Date()
         source = try store.upsert(source: source)
-        try? store.touchNotebook(id: notebookID)
+        _ = try? store.touchNotebook(id: notebookID)
 
         progress?(Progress(itemIndex: index, itemCount: total, title: source.title, stage: .embedding, fraction: 1.0))
         return Result(source: source, chunkCount: chunks.count, embeddingCount: embeddings.count, error: nil, notices: notices)

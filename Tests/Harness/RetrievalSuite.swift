@@ -58,7 +58,7 @@ enum RetrievalSuite {
             let embeddings = try awaitBuiltIn(chunks)
             try store.replaceChunks(sourceID: source.id, notebookID: notebook.id, chunks: chunks, embeddings: embeddings)
             source.chunkCount = chunks.count
-            try? FileStore.write(text, to: store.paths.extractedTextURL(for: source.id))
+            _ = try? FileStore.write(text, to: store.paths.extractedTextURL(for: source.id))
             source.contentPath = store.paths.extractedTextURL(for: source.id).path
             sources.append(try store.upsert(source: source))
         }

@@ -13,7 +13,7 @@ struct HarnessMain {
         let arguments = Array(CommandLine.arguments.dropFirst())
 
         // Non-test modes are handled before anything else so they never run the suite.
-        if arguments.contains("--debug-scratch") { try? DebugScratch.run(); exit(0) }
+        if arguments.contains("--debug-scratch") { DebugScratch.run(); exit(0) }
         if arguments.contains("--help") || arguments.contains("-h") {
             print("""
             Usage: SourceDeskHarness [--filter <substring>] [--quiet]
@@ -71,6 +71,7 @@ struct HarnessMain {
             OnboardingSuite.suite,
             DiscoveryPrivacySuite.suite,
             ReliabilitySuite.suite,
+            LocalizationSuite.suite,
         ]
 
         let result = await Harness.run(suites: suites, filter: filter, verbose: !quiet)

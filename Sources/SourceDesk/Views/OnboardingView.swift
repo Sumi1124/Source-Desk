@@ -50,10 +50,10 @@ struct OnboardingView: View {
 
         var title: String {
             switch self {
-            case .welcome:     return "Welcome to SourceDesk"
-            case .model:       return "Choose a model"
-            case .firstSource: return "Add your first source"
-            case .done:        return "You are ready"
+            case .welcome:     return L("Welcome to SourceDesk")
+            case .model:       return L("Choose a model")
+            case .firstSource: return L("Add your first source")
+            case .done:        return L("You are ready")
             }
         }
     }
@@ -123,14 +123,14 @@ struct OnboardingView: View {
         HStack(spacing: Design.spacingSmall) {
             // Skipping is always available and never punished: the app is fully usable
             // without the flow, and a user who wants to explore first should not be blocked.
-            Button("Skip") { finish(createNotebook: false) }
+            Button(L("Skip")) { finish(createNotebook: false) }
                 .buttonStyle(.link)
                 .help("Dismiss the welcome flow. You can reopen it from Help.")
 
             Spacer()
 
             if step > 0 {
-                Button("Back") { go(to: step - 1) }
+                Button(L("Back")) { go(to: step - 1) }
             }
             Button(primaryTitle) { advance() }
                 .keyboardShortcut(.defaultAction)
@@ -142,10 +142,10 @@ struct OnboardingView: View {
 
     private var primaryTitle: String {
         switch steps[step] {
-        case .welcome:     return "Get started"
-        case .model:       return "Continue"
+        case .welcome:     return L("Get started")
+        case .model:       return L("Continue")
         case .firstSource: return createNotebook ? "Create notebook" : "Continue"
-        case .done:        return "Open SourceDesk"
+        case .done:        return L("Open SourceDesk")
         }
     }
 
@@ -153,7 +153,7 @@ struct OnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(alignment: .leading, spacing: Design.spacingLarge) {
-            Text("A research notebook that keeps your sources on your Mac.")
+            Text(L("A research notebook that keeps your sources on your Mac."))
                 .font(.system(size: 15))
                 .foregroundStyle(.primary)
 
@@ -183,16 +183,16 @@ struct OnboardingView: View {
 
     private var modelStep: some View {
         VStack(alignment: .leading, spacing: Design.spacingLarge) {
-            Text("SourceDesk can use a model on this Mac, or a cloud provider you connect.")
+            Text(L("SourceDesk can use a model on this Mac, or a cloud provider you connect."))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                Text("Provider")
+                Text(L("Provider"))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
 
-                Picker("Provider", selection: $providerID) {
+                Picker(L("Provider"), selection: $providerID) {
                     ForEach(app.providers.all, id: \.identifier) { provider in
                         Text(providerLabel(provider)).tag(provider.identifier)
                     }
@@ -212,7 +212,7 @@ struct OnboardingView: View {
             // pulls a model, re-running the check is the obvious next step, and the status
             // text refers to it by name.
             if showRecheck {
-                Button("Check again") {
+                Button(L("Check again")) {
                     Task { await checkModels() }
                 }
                 .controlSize(.small)
@@ -220,11 +220,11 @@ struct OnboardingView: View {
 
             if !models.isEmpty {
                 VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                    Text("Model")
+                    Text(L("Model"))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
-                    Picker("Model", selection: $model) {
-                        Text("Choose a model").tag("")
+                    Picker(L("Model"), selection: $model) {
+                        Text(L("Choose a model")).tag("")
                         ForEach(models, id: \.self) { name in
                             Text(name).tag(name)
                         }
@@ -246,7 +246,7 @@ struct OnboardingView: View {
         case .checking:
             HStack(spacing: Design.spacingSmall) {
                 ProgressView().controlSize(.small)
-                Text("Looking for models…")
+                Text(L("Looking for models…"))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             }
@@ -275,8 +275,8 @@ struct OnboardingView: View {
 
             Toggle(isOn: $createNotebook) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Create my first notebook now")
-                    Text("A notebook groups sources with the questions and notes about them.")
+                    Text(L("Create my first notebook now"))
+                    Text(L("A notebook groups sources with the questions and notes about them."))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -285,7 +285,7 @@ struct OnboardingView: View {
 
             if createNotebook {
                 VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                    Text("Ways to add a source once you are in:")
+                    Text(L("Ways to add a source once you are in:"))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                     bullet("globe", "Paste a website address", "SourceDesk fetches the page and extracts the readable article text.")
@@ -305,7 +305,7 @@ struct OnboardingView: View {
             )
 
             VStack(alignment: .leading, spacing: Design.spacingMedium) {
-                Text("A few things worth knowing:")
+                Text(L("A few things worth knowing:"))
                     .font(.system(size: 13, weight: .medium))
                 bullet("command", "Press ⌘K", "Opens the command palette — jump to a notebook, add a source, or run a generator.")
                 bullet("questionmark.circle", "Citations are checkable", "Click a citation in an answer to open the exact passage it came from.")
@@ -360,8 +360,8 @@ struct OnboardingView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Online: web search, downloading pages, and any cloud model you connect.")
-                    Text("Offline: your sources, questions, notes and local models.")
+                    Text(L("Online: web search, downloading pages, and any cloud model you connect."))
+                    Text(L("Offline: your sources, questions, notes and local models."))
                 }
                 .font(Design.caption)
                 .foregroundStyle(.secondary)
@@ -377,12 +377,12 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: Design.spacingSmall) {
             Divider()
             if isLocalProvider {
-                Text("Ollama runs models on this Mac, so questions and sources stay on it. It needs at least one model pulled, and enough memory for the model you pick.")
+                Text(L("Ollama runs models on this Mac, so questions and sources stay on it. It needs at least one model pulled, and enough memory for the model you pick."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text("This is a cloud provider. When you ask a question, the passages it uses are sent to that provider so it can answer. SourceDesk asks for confirmation the first time you do this for each notebook.")
+                Text(L("This is a cloud provider. When you ask a question, the passages it uses are sent to that provider so it can answer. SourceDesk asks for confirmation the first time you do this for each notebook."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

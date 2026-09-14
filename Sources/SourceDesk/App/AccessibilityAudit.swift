@@ -41,7 +41,7 @@ enum AccessibilityAudit {
             report(result)
             reportViaAXAPI()
             let unnamed = lastUnnamedCount
-            try? FileManager.default.removeItem(at: paths.root)
+            _ = try? FileManager.default.removeItem(at: paths.root)
             // Only app-owned controls count: an unannounced button here means a VoiceOver
             // user cannot tell what it does.
             exit(unnamed == 0 ? 0 : 1)

@@ -296,7 +296,7 @@ public enum Fixtures {
     }
 
     public static func cleanup(_ paths: AppPaths) {
-        try? FileManager.default.removeItem(at: paths.root)
+        _ = try? FileManager.default.removeItem(at: paths.root)
     }
 
     @discardableResult

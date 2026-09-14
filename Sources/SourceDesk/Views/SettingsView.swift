@@ -11,21 +11,21 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             ProvidersSettings()
-                .tabItem { Label("AI Providers", systemImage: "cpu") }
+                .tabItem { Label(L("AI Providers"), systemImage: "cpu") }
             SearchSettings()
-                .tabItem { Label("Search", systemImage: "globe") }
+                .tabItem { Label(L("Search"), systemImage: "globe") }
             RetrievalSettings()
-                .tabItem { Label("Retrieval", systemImage: "square.stack.3d.up") }
+                .tabItem { Label(L("Retrieval"), systemImage: "square.stack.3d.up") }
             StorageSettings()
-                .tabItem { Label("Storage", systemImage: "internaldrive") }
+                .tabItem { Label(L("Storage"), systemImage: "internaldrive") }
             PrivacySettings()
-                .tabItem { Label("Privacy", systemImage: "lock.shield") }
+                .tabItem { Label(L("Privacy"), systemImage: "lock.shield") }
             AppearanceSettings()
-                .tabItem { Label("Appearance", systemImage: "paintbrush") }
+                .tabItem { Label(L("Appearance"), systemImage: "paintbrush") }
             AdvancedSettings()
-                .tabItem { Label("Advanced", systemImage: "gearshape.2") }
+                .tabItem { Label(L("Advanced"), systemImage: "gearshape.2") }
             AboutSettings()
-                .tabItem { Label("About", systemImage: "info.circle") }
+                .tabItem { Label(L("About"), systemImage: "info.circle") }
         }
         .frame(width: 780, height: 620)
     }
@@ -75,7 +75,7 @@ struct ProvidersSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Local server")
+                SectionHeader(L("Local server"))
                 LabelledField(
                     label: "Ollama endpoint",
                     help: "Where SourceDesk looks for a local model server. Ollama is detected automatically; SourceDesk never installs or downloads models for you."
@@ -86,7 +86,7 @@ struct ProvidersSettings: View {
                             set: { value in app.updateSettings { $0.ollamaEndpoint = value } }
                         ))
                         .textFieldStyle(.roundedBorder)
-                        Button("Test Connection") {
+                        Button(L("Test Connection")) {
                             Task { await app.loadModels(for: "ollama", force: true) }
                         }
                     }
@@ -107,7 +107,7 @@ struct ProvidersSettings: View {
                             set: { value in app.updateSettings { $0.ollamaCloudEndpoint = value } }
                         ))
                         .textFieldStyle(.roundedBorder)
-                        Button("Test Connection") {
+                        Button(L("Test Connection")) {
                             Task { await app.loadModels(for: "ollama-cloud", force: true) }
                         }
                     }
@@ -120,7 +120,7 @@ struct ProvidersSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Generation")
+                SectionHeader(L("Generation"))
                 LabelledField(label: "Temperature", help: "Lower is more literal and better grounded in sources. 0.2 is a good default for research.") {
                     HStack {
                         Slider(value: Binding(
@@ -172,7 +172,7 @@ struct ProviderCard: View {
     /// A clearer privacy line than a bare local/cloud switch.
     private var privacyLine: String {
         if let ollama = provider as? OllamaProvider, ollama.isCloud {
-            return "Runs Ollama's hosted models on ollama.com"
+            return L("Runs Ollama's hosted models on ollama.com")
         }
         return provider.isLocal ? "Runs on this Mac" : "Sends retrieved passages to a cloud service"
     }
@@ -196,7 +196,7 @@ struct ProviderCard: View {
                 if isSelected {
                     StatusPill(text: "in use", color: .accentColor, symbol: "checkmark.circle.fill")
                 } else {
-                    Button("Use This Provider") {
+                    Button(L("Use This Provider")) {
                         app.updateSettings { $0.preferredProviderID = provider.identifier }
                         Task { await app.loadModels(for: provider.identifier, force: true) }
                     }
@@ -212,7 +212,7 @@ struct ProviderCard: View {
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Check Again") {
+                Button(L("Check Again")) {
                     Task { await app.loadModels(for: provider.identifier, force: true) }
                 }
                 .controlSize(.small)
@@ -228,10 +228,15 @@ struct ProviderCard: View {
             // API key entry, for cloud providers only. The key goes to the Keychain.
             if let keychainKey {
                 HStack(spacing: Design.spacingSmall) {
-                    if let hint = KeychainService().maskedHint(for: keychainKey) {
+                    // Never read the Keychain from a view body. `SecItemCopyMatching` takes a
+                    // process-wide lock, and two bodies reading it during layout deadlocked
+                    // the app inside the Security framework. This reads the cache that
+                    // AppState fills once at start-up.
+                    if let hint = app.credentialHints[keychainKey.rawValue] {
                         StatusPill(text: "key saved \(hint)", color: .green, symbol: "checkmark.shield.fill")
-                        Button("Remove Key") {
+                        Button(L("Remove Key")) {
                             KeychainService().delete(keychainKey)
+                            app.refreshCredentialHints()
                             keySaved = false
                             Task { await app.loadModels(for: provider.identifier, force: true) }
                         }
@@ -242,16 +247,16 @@ struct ProviderCard: View {
                                 .textFieldStyle(.roundedBorder)
                                 .frame(maxWidth: 320)
                                 .onSubmit { saveKey(keychainKey) }
-                            Button("Save Key") { saveKey(keychainKey) }
+                            Button(L("Save Key")) { saveKey(keychainKey) }
                                 .controlSize(.small)
                                 .disabled(keyDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                         } else {
-                            Button("Add API Key…") { revealKeyField = true }
+                            Button(L("Add API Key…")) { revealKeyField = true }
                                 .controlSize(.small)
                         }
                     }
                 }
-                Text("Keys are stored in the macOS Keychain, never in a notebook, a settings file or an export.")
+                Text(L("Keys are stored in the macOS Keychain, never in a notebook, a settings file or an export."))
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -260,7 +265,7 @@ struct ProviderCard: View {
             let models = app.availableModels[provider.identifier] ?? []
             if !models.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Models").font(.system(size: 11, weight: .medium))
+                    Text(L("Models")).font(.system(size: 11, weight: .medium))
                     ForEach(models.filter { !$0.supportsEmbeddings }) { model in
                         HStack(spacing: Design.spacingSmall) {
                             Image(systemName: app.settings.model(for: provider.identifier) == model.name ? "largecircle.fill.circle" : "circle")
@@ -320,7 +325,7 @@ struct ProviderCard: View {
         case .notConfigured(let reason): return reason
         case .unreachable(let reason): return reason
         case .unavailable(let reason): return reason
-        case nil: return "Not checked yet"
+        case nil: return L("Not checked yet")
         }
     }
 
@@ -353,7 +358,7 @@ struct SearchSettings: View {
             subtitle: "Web search is optional. When it is on, the queries you make are sent to the provider you choose here."
         ) {
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Search provider")
+                SectionHeader(L("Search provider"))
                 ForEach(SearchEngine.allCases, id: \.self) { engine in
                     HStack(alignment: .top, spacing: Design.spacingSmall) {
                         Image(systemName: app.settings.searchEngine == engine ? "largecircle.fill.circle" : "circle")
@@ -390,7 +395,7 @@ struct SearchSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Behaviour")
+                SectionHeader(L("Behaviour"))
                 LabelledField(label: "Results per search", help: "How many web results to retrieve for a question.") {
                     Stepper(value: Binding(
                         get: { app.settings.searchResultCount },
@@ -400,18 +405,18 @@ struct SearchSettings: View {
                             .font(Design.caption)
                     }
                 }
-                Toggle("Fetch full page text for search results", isOn: Binding(
+                Toggle(L("Fetch full page text for search results"), isOn: Binding(
                     get: { app.settings.enrichWebResults },
                     set: { value in app.updateSettings { $0.enrichWebResults = value } }
                 ))
-                Text("When on, SourceDesk reads the top results so answers use real page text rather than a snippet. robots.txt is respected.")
+                Text(L("When on, SourceDesk reads the top results so answers use real page text rather than a snippet. robots.txt is respected."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Default answer scope")
+                SectionHeader(L("Default answer scope"))
                 Picker("", selection: Binding(
                     get: { app.settings.defaultAnswerScope },
                     set: { value in app.updateSettings { $0.defaultAnswerScope = value } }
@@ -444,10 +449,11 @@ struct SearchKeyField: View {
     var body: some View {
         LabelledField(label: label, help: help) {
             HStack(spacing: Design.spacingSmall) {
-                if let hint = KeychainService().maskedHint(for: key) {
+                if let hint = app.credentialHints[key.rawValue] {
                     StatusPill(text: "saved \(hint)", color: .green, symbol: "checkmark.shield.fill")
-                    Button("Remove") {
+                    Button(L("Remove")) {
                         KeychainService().delete(key)
+                        app.refreshCredentialHints()
                         app.statusMessage = "\(label) removed"
                     }
                     .controlSize(.small)
@@ -455,10 +461,11 @@ struct SearchKeyField: View {
                     SecureField("Paste key", text: $draft)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 320)
-                    Button("Save") {
+                    Button(L("Save")) {
                         _ = KeychainService().store(draft, for: key)
                         draft = ""
                         editing = false
+                        app.refreshCredentialHints()
                         app.statusMessage = "\(label) saved to the Keychain"
                     }
                     .controlSize(.small)
@@ -483,7 +490,7 @@ struct RetrievalSettings: View {
             subtitle: "How SourceDesk finds the passages it sends to the model. These settings trade recall against speed and cost, and can be changed later — sources can be re-indexed at any time."
         ) {
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Passages")
+                SectionHeader(L("Passages"))
                 LabelledField(label: "Passages in the answer", help: "How many retrieved passages are offered to the model. More improves recall but costs context.") {
                     Stepper(value: Binding(
                         get: { app.settings.retrievalResultCount },
@@ -530,23 +537,23 @@ struct RetrievalSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Search methods")
-                Toggle("Semantic search (embeddings)", isOn: Binding(
+                SectionHeader(L("Search methods"))
+                Toggle(L("Semantic search (embeddings)"), isOn: Binding(
                     get: { app.settings.semanticSearchEnabled },
                     set: { value in app.updateSettings { $0.semanticSearchEnabled = value } }
                 ))
-                Toggle("Keyword search (full-text index)", isOn: Binding(
+                Toggle(L("Keyword search (full-text index)"), isOn: Binding(
                     get: { app.settings.keywordSearchEnabled },
                     set: { value in app.updateSettings { $0.keywordSearchEnabled = value } }
                 ))
-                Text("Hybrid retrieval runs both and merges the rankings, so losing one method degrades recall rather than breaking search.")
+                Text(L("Hybrid retrieval runs both and merges the rankings, so losing one method degrades recall rather than breaking search."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Embeddings")
+                SectionHeader(L("Embeddings"))
                 Picker("", selection: Binding(
                     get: { app.settings.embeddingChoice },
                     set: { value in app.updateSettings { $0.embeddingChoice = value } }
@@ -572,21 +579,21 @@ struct RetrievalSettings: View {
                         .frame(maxWidth: 280)
                     }
                 }
-                Button("Re-index All Sources in This Notebook") {
+                Button(L("Re-index All Sources in This Notebook")) {
                     for source in app.sources {
                         app.reindexSource(source.id)
                     }
                 }
                 .controlSize(.small)
                 .disabled(app.sources.isEmpty)
-                Text("Changing the embedding model, chunk size or overlap requires re-indexing for the new settings to take effect. Sources keep working either way.")
+                Text(L("Changing the embedding model, chunk size or overlap requires re-indexing for the new settings to take effect. Sources keep working either way."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Ranking")
+                SectionHeader(L("Ranking"))
                 Picker("", selection: Binding(
                     get: { app.settings.rerankStrategy },
                     set: { value in app.updateSettings { $0.rerankStrategy = value } }
@@ -604,7 +611,7 @@ struct RetrievalSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Chunking")
+                SectionHeader(L("Chunking"))
                 LabelledField(label: "Chunk size", help: "Target size of each passage. Smaller passages retrieve precisely; larger ones read better.") {
                     Stepper(value: Binding(
                         get: { app.settings.chunkTargetTokens },
@@ -621,7 +628,7 @@ struct RetrievalSettings: View {
                         Text("\(app.settings.chunkOverlapTokens) tokens").font(Design.caption)
                     }
                 }
-                Toggle("Prefix passages with their heading", isOn: Binding(
+                Toggle(L("Prefix passages with their heading"), isOn: Binding(
                     get: { app.settings.includeHeadingContextInChunks },
                     set: { value in app.updateSettings { $0.includeHeadingContextInChunks = value } }
                 ))
@@ -653,7 +660,7 @@ struct StorageSettings: View {
 
     private var locationSection: some View {
         VStack(alignment: .leading, spacing: Design.spacingSmall) {
-            SectionHeader("Location")
+            SectionHeader(L("Location"))
             HStack {
                 Text(app.paths.displayPath(app.paths.root))
                     .font(Design.monoCaption)
@@ -661,12 +668,12 @@ struct StorageSettings: View {
                     .lineLimit(2)
                     .truncationMode(.middle)
                 Spacer()
-                Button("Reveal in Finder") {
+                Button(L("Reveal in Finder")) {
                     NSWorkspace.shared.activateFileViewerSelecting([app.paths.root])
                 }
                 .controlSize(.small)
             }
-            Text("To move your library, quit SourceDesk, move the folder, then set the new path here and relaunch.")
+            Text(L("To move your library, quit SourceDesk, move the folder, then set the new path here and relaunch."))
                 .font(Design.caption)
                 .foregroundStyle(.secondary)
         }
@@ -674,13 +681,13 @@ struct StorageSettings: View {
 
     private var databaseSection: some View {
         VStack(alignment: .leading, spacing: Design.spacingSmall) {
-            SectionHeader("Database")
-            DetailRow(label: "Notebooks", value: Format.count(stats.notebookCount))
-            DetailRow(label: "Sources", value: Format.count(stats.sourceCount))
-            DetailRow(label: "Passages", value: Format.count(stats.chunkCount))
+            SectionHeader(L("Database"))
+            DetailRow(label: L("Notebooks"), value: Format.count(stats.notebookCount))
+            DetailRow(label: L("Sources"), value: Format.count(stats.sourceCount))
+            DetailRow(label: L("Passages"), value: Format.count(stats.chunkCount))
             DetailRow(label: "Vectors", value: Format.count(stats.embeddingCount))
             DetailRow(label: "Messages", value: Format.count(stats.messageCount))
-            DetailRow(label: "Notes", value: Format.count(stats.noteCount))
+            DetailRow(label: L("Notes"), value: Format.count(stats.noteCount))
             DetailRow(label: "Stored text", value: Format.bytes(stats.contentBytes))
             DetailRow(label: "Database size", value: Format.bytes(stats.databaseBytes))
             if !stats.embeddingModels.isEmpty {
@@ -695,27 +702,27 @@ struct StorageSettings: View {
 
     private var databaseButtons: some View {
         HStack(spacing: Design.spacingSmall) {
-            Button("Refresh") { refresh() }
+            Button(L("Refresh")) { refresh() }
                 .controlSize(.small)
-            Button("Run Integrity Check") {
+            Button(L("Run Integrity Check")) {
                 integrity = (try? app.store?.db.integrityCheck()) ?? "unavailable"
                 app.statusMessage = "Integrity check: \(integrity)"
             }
             .controlSize(.small)
-            Button("Optimise Database") { app.optimizeLibrary() }
+            Button(L("Optimise Database")) { app.optimizeLibrary() }
                 .controlSize(.small)
         }
     }
 
     private var cacheSection: some View {
         VStack(alignment: .leading, spacing: Design.spacingSmall) {
-            SectionHeader("Cache")
-            Text("Downloaded pages and intermediate files are cached so imports are not repeated. Clearing the cache never touches sources, notes or conversations.")
+            SectionHeader(L("Cache"))
+            Text(L("Downloaded pages and intermediate files are cached so imports are not repeated. Clearing the cache never touches sources, notes or conversations."))
                 .font(Design.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("Clear Cache") { app.clearCache() }
+                Button(L("Clear Cache")) { app.clearCache() }
                     .controlSize(.small)
                 Spacer()
                 Text(Format.bytes(FileStore.totalSize(of: app.paths.cacheRoot)))
@@ -727,7 +734,7 @@ struct StorageSettings: View {
 
     private var limitsSection: some View {
         VStack(alignment: .leading, spacing: Design.spacingSmall) {
-            SectionHeader("Limits")
+            SectionHeader(L("Limits"))
             importLimitField
             pageLimitField
         }
@@ -786,29 +793,29 @@ struct PrivacySettings: View {
             subtitle: "SourceDesk is built so that nothing leaves your Mac unless you choose a feature that requires it. These controls make that guarantee explicit."
         ) {
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Local-only mode")
-                Toggle("Never send source content to a cloud provider", isOn: Binding(
+                SectionHeader(L("Local-only mode"))
+                Toggle(L("Never send source content to a cloud provider"), isOn: Binding(
                     get: { app.settings.localOnlyMode },
                     set: { value in app.updateSettings { $0.localOnlyMode = value } }
                 ))
-                Text("While this is on, cloud providers are unavailable and SourceDesk says so rather than quietly falling back. Local models, local search and every study tool keep working.")
+                Text(L("While this is on, cloud providers are unavailable and SourceDesk says so rather than quietly falling back. Local models, local search and every study tool keep working."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Cloud confirmation")
-                Toggle("Ask before sending source content to a cloud provider", isOn: Binding(
+                SectionHeader(L("Cloud confirmation"))
+                Toggle(L("Ask before sending source content to a cloud provider"), isOn: Binding(
                     get: { app.settings.confirmBeforeCloudSend },
                     set: { value in app.updateSettings { $0.confirmBeforeCloudSend = value } }
                 ))
-                Text("Approval is granted per notebook, so one click cannot expose an entire library.")
+                Text(L("Approval is granted per notebook, so one click cannot expose an entire library."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
 
                 if app.settings.confirmBeforeCloudSend, !app.settings.cloudApprovedNotebooks.isEmpty {
-                    SectionHeader("Notebooks approved for cloud use")
+                    SectionHeader(L("Notebooks approved for cloud use"))
                     ForEach(app.settings.cloudApprovedNotebooks, id: \.self) { id in
                         HStack {
                             Image(systemName: "cloud")
@@ -817,7 +824,7 @@ struct PrivacySettings: View {
                             Text(app.notebooks.first { $0.id == id }?.title ?? "Deleted notebook")
                                 .font(Design.caption)
                             Spacer()
-                            Button("Revoke") { app.revokeCloudConsent(for: id) }
+                            Button(L("Revoke")) { app.revokeCloudConsent(for: id) }
                                 .controlSize(.small)
                         }
                     }
@@ -825,28 +832,28 @@ struct PrivacySettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Web fetching")
-                Toggle("Respect robots.txt when downloading pages", isOn: Binding(
+                SectionHeader(L("Web fetching"))
+                Toggle(L("Respect robots.txt when downloading pages"), isOn: Binding(
                     get: { app.settings.respectRobotsTxt },
                     set: { value in app.updateSettings { $0.respectRobotsTxt = value } }
                 ))
-                Text("On by default. SourceDesk never attempts to bypass a sign-in, a paywall or an access control — it reports the problem and suggests importing the content another way.")
+                Text(L("On by default. SourceDesk never attempts to bypass a sign-in, a paywall or an access control — it reports the problem and suggests importing the content another way."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Toggle("Keep a copy of original downloaded files", isOn: Binding(
+                Toggle(L("Keep a copy of original downloaded files"), isOn: Binding(
                     get: { app.settings.storeOriginalDownloads },
                     set: { value in app.updateSettings { $0.storeOriginalDownloads = value } }
                 ))
-                Text("Keeping the original means a source survives the file being moved or deleted, and can be re-extracted without re-downloading.")
+                Text(L("Keeping the original means a source survives the file being moved or deleted, and can be re-extracted without re-downloading."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("What leaves this Mac")
+                SectionHeader(L("What leaves this Mac"))
                 privacyRow(.local, "Notebooks, sources, passages, vectors, notes, conversations, settings",
                            "Stored in \(app.paths.displayPath(app.paths.root))")
                 privacyRow(.cloud, "Retrieved passages and your question",
@@ -860,16 +867,16 @@ struct PrivacySettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Credentials")
-                Text("API keys are stored in the macOS Keychain, scoped to this app. They are never written to the notebook database, a settings file, a log, or an exported notebook. Removing a key here deletes it from the Keychain.")
+                SectionHeader(L("Credentials"))
+                Text(L("API keys are stored in the macOS Keychain, scoped to this app. They are never written to the notebook database, a settings file, a log, or an exported notebook. Removing a key here deletes it from the Keychain."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: Design.spacingSmall) {
                     ForEach(KeychainService.Key.allCases, id: \.self) { key in
                         StatusPill(text: key.providerName,
-                                   color: KeychainService().hasSecret(for: key) ? .green : .secondary,
-                                   symbol: KeychainService().hasSecret(for: key) ? "checkmark.shield.fill" : "shield.slash")
+                                   color: app.credentialHints[key.rawValue] != nil ? .green : .secondary,
+                                   symbol: app.credentialHints[key.rawValue] != nil ? "checkmark.shield.fill" : "shield.slash")
                     }
                 }
             }
@@ -908,7 +915,7 @@ struct AppearanceSettings: View {
             subtitle: "SourceDesk follows macOS conventions. These are the few places the interface adapts to how you read."
         ) {
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Theme")
+                SectionHeader(L("Theme"))
                 Picker("", selection: Binding(
                     get: { app.settings.appearance },
                     set: { value in app.updateSettings { $0.appearance = value } }
@@ -923,18 +930,41 @@ struct AppearanceSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Layout")
-                Toggle("Show the inspector panel", isOn: Binding(
-                    get: { app.settings.showInspector },
-                    set: { value in app.updateSettings { $0.showInspector = value } }
-                ))
-                Text("The inspector shows the selected source, the citations behind the current answer, and note provenance.")
+                SectionHeader(L("Interface Language"))
+                Picker("", selection: Binding(
+                    get: { app.settings.language },
+                    set: { value in app.updateSettings { $0.language = value } }
+                )) {
+                    ForEach(AppLanguage.allCases, id: \.self) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 320)
+                // "System" is the default and is genuinely useful, but it is also the option
+                // that makes a bug report ambiguous, so the resolved language is stated.
+                Text(L("Changes apply immediately.") + "  " +
+                     (app.settings.language == .system
+                      ? "(\u{73FE}\u{5728}: \(Localizer.shared.current.displayName))"
+                      : ""))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Reading")
+                SectionHeader(L("Layout"))
+                Toggle(L("Show the inspector panel"), isOn: Binding(
+                    get: { app.settings.showInspector },
+                    set: { value in app.updateSettings { $0.showInspector = value } }
+                ))
+                Text(L("The inspector shows the selected source, the citations behind the current answer, and note provenance."))
+                    .font(Design.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: Design.spacingSmall) {
+                SectionHeader(L("Reading"))
                 LabelledField(label: "Answer text size", help: "Applies to answers and notes.") {
                     HStack {
                         Slider(value: Binding(
@@ -946,7 +976,7 @@ struct AppearanceSettings: View {
                             .frame(width: 44, alignment: .trailing)
                     }
                 }
-                Toggle("Show word and passage counts in the source list", isOn: Binding(
+                Toggle(L("Show word and passage counts in the source list"), isOn: Binding(
                     get: { app.settings.showSourceWordCounts },
                     set: { value in app.updateSettings { $0.showSourceWordCounts = value } }
                 ))
@@ -968,7 +998,7 @@ struct AdvancedSettings: View {
             subtitle: "Fine-grained control for large libraries, unusual hardware, or self-hosted providers. The defaults work for most research notes."
         ) {
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Self-hosted or compatible providers")
+                SectionHeader(L("Self-hosted or compatible providers"))
                 LabelledField(label: "OpenAI-compatible base URL",
                              help: "Point OpenAI support at any gateway implementing /v1/chat/completions — a proxy, a self-hosted server, or another vendor's compatible endpoint. Leave empty for the official API.") {
                     TextField("https://api.openai.com/v1", text: Binding(
@@ -989,7 +1019,7 @@ struct AdvancedSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Performance")
+                SectionHeader(L("Performance"))
                 LabelledField(label: "Concurrent imports", help: "How many sources are processed at once. Lower this on a Mac with little memory.") {
                     Stepper(value: Binding(
                         get: { app.settings.maximumConcurrentIngestions },
@@ -1009,8 +1039,8 @@ struct AdvancedSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("System prompt")
-                Text("Replaces SourceDesk's own grounding instructions. Leave empty for the default, which requires answers to cite retrieved material and to say when it cannot.")
+                SectionHeader(L("System prompt"))
+                Text(L("Replaces SourceDesk's own grounding instructions. Leave empty for the default, which requires answers to cite retrieved material and to say when it cannot."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1024,11 +1054,11 @@ struct AdvancedSettings: View {
                 .background(RoundedRectangle(cornerRadius: 5).fill(Color(nsColor: .textBackgroundColor)))
                 .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
                 HStack {
-                    Text("Preview of the default instructions")
+                    Text(L("Preview of the default instructions"))
                         .font(Design.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Show Default") {
+                    Button(L("Show Default")) {
                         logLines = PromptBuilder.researchSystemPrompt(PromptBuilder.Grounding(
                             notebookAvailable: true, webAvailable: true, sourceCount: 1,
                             scope: .notebookAndWeb, cloudProviderName: nil
@@ -1054,7 +1084,7 @@ struct AdvancedSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Diagnostics")
+                SectionHeader(L("Diagnostics"))
                 Picker("", selection: Binding(
                     get: { app.settings.logLevel },
                     set: { value in app.updateSettings { $0.logLevel = value } }
@@ -1071,10 +1101,10 @@ struct AdvancedSettings: View {
                     .foregroundStyle(.secondary)
 
                 HStack(spacing: Design.spacingSmall) {
-                    Button("Show Recent Log") {
+                    Button(L("Show Recent Log")) {
                         logLines = DiagnosticsLog.shared.recentLines(limit: 200)
                     }
-                    Button("Reveal Log Folder") {
+                    Button(L("Reveal Log Folder")) {
                         NSWorkspace.shared.activateFileViewerSelecting([app.paths.logsRoot])
                     }
                 }
@@ -1082,19 +1112,19 @@ struct AdvancedSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Reset")
+                SectionHeader(L("Reset"))
                 HStack(spacing: Design.spacingSmall) {
-                    Button("Reset All Settings to Defaults") {
+                    Button(L("Reset All Settings to Defaults")) {
                         app.updateSettings { current in current = AppSettings() }
                         app.statusMessage = "Settings reset to defaults"
                     }
-                    Button("Re-Index Every Source in This Notebook") {
+                    Button(L("Re-Index Every Source in This Notebook")) {
                         for source in app.sources { app.reindexSource(source.id) }
                     }
                     .disabled(app.sources.isEmpty)
                 }
                 .controlSize(.small)
-                Text("Resetting settings never touches notebooks, sources, notes or conversations.")
+                Text(L("Resetting settings never touches notebooks, sources, notes or conversations."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1118,13 +1148,13 @@ struct AboutSettings: View {
                 DetailRow(label: "Version", value: AppInfo.version)
                 DetailRow(label: "Platform", value: "macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
                 DetailRow(label: "Library", value: app.paths.displayPath(app.paths.root), monospaced: true)
-                DetailRow(label: "Notebooks", value: Format.count(stats.notebookCount))
-                DetailRow(label: "Sources", value: Format.count(stats.sourceCount))
-                DetailRow(label: "Passages", value: Format.count(stats.chunkCount))
+                DetailRow(label: L("Notebooks"), value: Format.count(stats.notebookCount))
+                DetailRow(label: L("Sources"), value: Format.count(stats.sourceCount))
+                DetailRow(label: L("Passages"), value: Format.count(stats.chunkCount))
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("How answers stay grounded")
+                SectionHeader(L("How answers stay grounded"))
                 Text("""
                 SourceDesk retrieves passages from your own sources, labels them, and instructs the model to cite them with markers like [Source 1]. After generation every marker is checked against what was actually retrieved: a citation that does not resolve to a real passage is removed from the answer rather than shown.
                 """)
@@ -1134,16 +1164,16 @@ struct AboutSettings: View {
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("Dependencies")
-                Text("No third-party packages. SourceDesk uses only Apple frameworks — SwiftUI, AppKit, PDFKit, Network — plus SQLite and zlib, which ship with macOS.")
+                SectionHeader(L("Dependencies"))
+                Text(L("No third-party packages. SourceDesk uses only Apple frameworks — SwiftUI, AppKit, PDFKit, Network — plus SQLite and zlib, which ship with macOS."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: Design.spacingSmall) {
-                SectionHeader("License")
-                Text("MIT. SourceDesk is an independent project; it is not affiliated with, and contains no assets or code from, Google NotebookLM or any other product.")
+                SectionHeader(L("License"))
+                Text(L("MIT. SourceDesk is an independent project; it is not affiliated with, and contains no assets or code from, Google NotebookLM or any other product."))
                     .font(Design.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

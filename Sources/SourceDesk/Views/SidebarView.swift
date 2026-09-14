@@ -49,7 +49,7 @@ struct SidebarView: View {
                     Section {
                         ForEach(favourites) { notebook in row(notebook) }
                     } header: {
-                        SectionHeader("Favorites")
+                        SectionHeader(L("Favorites"))
                     }
                 }
 
@@ -63,7 +63,7 @@ struct SidebarView: View {
                         ForEach(recent) { notebook in row(notebook) }
                     }
                 } header: {
-                    SectionHeader(favourites.isEmpty ? "Notebooks" : "All Notebooks")
+                    SectionHeader(favourites.isEmpty ? L("Notebooks") : L("All Notebooks"))
                 }
             }
             .listStyle(.sidebar)
@@ -73,9 +73,9 @@ struct SidebarView: View {
 
             VStack(spacing: 2) {
                 Button {
-                    app.createNotebook(title: "Untitled notebook")
+                    _ = app.createNotebook(title: "Untitled notebook")
                 } label: {
-                    Label("New Notebook", systemImage: "plus")
+                    Label(L("New Notebook"), systemImage: "plus")
                         .font(Design.rowTitle)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -89,7 +89,7 @@ struct SidebarView: View {
                     Button("Add Files…", action: onAddFiles)
                     Button("Paste Text…", action: onAddPastedText)
                 } label: {
-                    Label("Add Sources…", systemImage: "tray.and.arrow.down")
+                    Label(L("Add Sources…"), systemImage: "tray.and.arrow.down")
                         .font(Design.rowTitle)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -98,7 +98,7 @@ struct SidebarView: View {
                 .padding(.vertical, 5)
 
                 SettingsLink {
-                    Label("Settings", systemImage: "gearshape")
+                    Label(L("Settings"), systemImage: "gearshape")
                         .font(Design.rowTitle)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -146,7 +146,7 @@ struct SidebarView: View {
         )
         .tag(notebook.id)
         .contextMenu {
-            Button("Rename…") {
+            Button(L("Rename…")) {
                 renameText = notebook.title
                 renamingNotebookID = notebook.id
             }
@@ -154,7 +154,7 @@ struct SidebarView: View {
                 app.toggleFavorite(notebook)
             }
             Divider()
-            Button("Export…") {
+            Button(L("Export…")) {
                 app.selectedNotebookID = notebook.id
                 NotificationCenter.default.post(name: .exportNotebook, object: nil)
             }
@@ -268,7 +268,7 @@ private struct SidebarFilter: ViewModifier {
                 content
             }
         } else {
-            content.searchable(text: $text, placement: .sidebar, prompt: "Filter notebooks")
+            content.searchable(text: $text, placement: .sidebar, prompt: L("Filter notebooks"))
         }
     }
 }

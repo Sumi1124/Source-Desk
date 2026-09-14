@@ -122,6 +122,59 @@ jobs:
             exit 1
           fi
 
+      # Signs with a Developer ID when the repository has one, and explains exactly what is
+      # missing when it does not — it never claims to have signed. A release built without
+      # the secret stays ad-hoc signed, which is honest and still installable.
+      #
+      # Provide the certificate by setting these repository secrets:
+      #   MACOS_CERTIFICATE_P12        base64 of a .p12 exported from Keychain Access
+      #   MACOS_CERTIFICATE_PASSWORD   its password
+      #   MACOS_KEYCHAIN_PASSWORD      any value; used for the temporary keychain
+      # and, to remove the first-launch dialog entirely, for notarization:
+      #   MACOS_NOTARY_APPLE_ID, MACOS_NOTARY_TEAM_ID, MACOS_NOTARY_PASSWORD
+      - name: Sign (Developer ID if available)
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          if [ -z "${MACOS_CERTIFICATE_P12:-}" ]; then
+            echo "No signing certificate in this repository's secrets."
+            echo "The release will be ad-hoc signed; users follow the README's first-launch step."
+            ./scripts/sign_and_notarize.sh build/SourceDesk.app || true
+            exit 0
+          fi
+
+          echo "Importing the Developer ID certificate into a temporary keychain…"
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          # Without this the signing call blocks on a GUI prompt that no runner can answer.
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          if [ -n "${MACOS_NOTARY_APPLE_ID:-}" ]; then
+            export SOURCEDESK_NOTARIZE=1
+            export SOURCEDESK_APPLE_ID="$MACOS_NOTARY_APPLE_ID"
+            export SOURCEDESK_APPLE_TEAM_ID="$MACOS_NOTARY_TEAM_ID"
+            export SOURCEDESK_APPLE_APP_PASSWORD="$MACOS_NOTARY_PASSWORD"
+          fi
+          ./scripts/sign_and_notarize.sh build/SourceDesk.app
+          # The check the release actually depends on: a signature Apple would honour.
+          if codesign -dvv build/SourceDesk.app 2>&1 | grep -q "TeamIdentifier=not set"; then
+            echo "::error::signing did not take — the bundle has no team identifier"
+            exit 1
+          fi
+
       # The layout step drives Finder, which needs a window server. On a runner that
       # silently does nothing and the image is still built — the script is written to
       # tolerate that rather than fail the release over cosmetics.

@@ -103,48 +103,48 @@ struct SourceDeskCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("New Notebook") { _ = app.createNotebook(title: "Untitled notebook") }
+            Button(L("New Notebook")) { _ = app.createNotebook(title: "Untitled notebook") }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
         }
 
         CommandGroup(replacing: .saveItem) {
-            Button("Export Notebook…") {
+            Button(L("Export Notebook…")) {
                 NotificationCenter.default.post(name: .exportNotebook, object: nil)
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
-            Button("Import Notebook…") {
+            Button(L("Import Notebook…")) {
                 NotificationCenter.default.post(name: .importNotebook, object: nil)
             }
             .keyboardShortcut("i", modifiers: [.command, .shift])
         }
 
         CommandGroup(replacing: .help) {
-            Button("SourceDesk Help…") { app.reopenOnboarding() }
+            Button(L("SourceDesk Help…")) { app.reopenOnboarding() }
             Divider()
             Link("SourceDesk on GitHub", destination: URL(string: "https://github.com/Sumi1124/Source-Desk")!)
         }
 
         CommandMenu("Notebook") {
-            Button("Add Website…") { NotificationCenter.default.post(name: .addWebsite, object: nil) }
+            Button(L("Add Website…")) { NotificationCenter.default.post(name: .addWebsite, object: nil) }
                 .keyboardShortcut("u", modifiers: [.command, .shift])
-            Button("Add Files…") { NotificationCenter.default.post(name: .addFiles, object: nil) }
+            Button(L("Add Files…")) { NotificationCenter.default.post(name: .addFiles, object: nil) }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
-            Button("Paste Text…") { NotificationCenter.default.post(name: .addPastedText, object: nil) }
+            Button(L("Paste Text…")) { NotificationCenter.default.post(name: .addPastedText, object: nil) }
             Divider()
-            Button("Research") { app.section = .research }
+            Button(L("Research")) { app.section = .research }
                 .keyboardShortcut("1", modifiers: .command)
-            Button("Sources") { app.section = .sources }
+            Button(L("Sources")) { app.section = .sources }
                 .keyboardShortcut("2", modifiers: .command)
-            Button("Notes") { app.section = .notes }
+            Button(L("Notes")) { app.section = .notes }
                 .keyboardShortcut("3", modifiers: .command)
-            Button("Study Tools") { app.section = .studyTools }
+            Button(L("Study Tools")) { app.section = .studyTools }
                 .keyboardShortcut("4", modifiers: .command)
-            Button("Search") { app.section = .search }
+            Button(L("Search")) { app.section = .search }
                 .keyboardShortcut("5", modifiers: .command)
             Divider()
-            Button("Show Command Palette…") { app.commandPaletteVisible = true }
+            Button(L("Show Command Palette…")) { app.commandPaletteVisible = true }
                 .keyboardShortcut("k", modifiers: .command)
-            Button("Refresh Models") {
+            Button(L("Refresh Models")) {
                 Task { await app.refreshAllModels() }
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])

@@ -501,7 +501,7 @@ public struct AnswerEngine: Sendable {
     private func modelRerank(query: String, candidates: [RetrievedChunk], provider: AIProvider) async -> [Double] {
         guard !candidates.isEmpty else { return [] }
         let (system, user) = PromptBuilder.rerankPrompt(query: query, candidates: candidates)
-        var request = AIRequest(
+        let request = AIRequest(
             messages: [.user(user)],
             model: configuration.modelName,
             temperature: 0,
